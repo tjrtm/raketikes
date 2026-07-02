@@ -1,4 +1,22 @@
+# dependencies & builds
 node_modules/
 dist/
+*.tsbuildinfo
+
+# environment / secrets
+.env
+.env*.local
+
+# logs & OS noise
 *.log
 .DS_Store
+
+# editors
+.vscode/
+.idea/
+
+# tests
+coverage/
+
+# machine-local tool config
+.claude/settings.local.json
