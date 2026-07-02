@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rocket Arena</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #06080f; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; user-select: none; }
+    #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .hud { position: fixed; color: #e8f0ff; pointer-events: none; z-index: 10; }
+    #scoreboard { top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: rgba(8,12,24,.72); border: 1px solid rgba(90,140,255,.35); border-radius: 12px; padding: 8px 20px; backdrop-filter: blur(4px); }
+    .score { font-size: 32px; font-weight: 800; min-width: 44px; text-align: center; }
+    #scoreBlue { color: #4db2ff; text-shadow: 0 0 14px rgba(60,150,255,.5); }
+    #scoreOrange { color: #ff9040; text-shadow: 0 0 14px rgba(255,140,50,.5); }
+    #timer { font-size: 24px; font-weight: 700; letter-spacing: 1px; min-width: 74px; text-align: center; color: #dfe8ff; }
+    #timer.overtime { color: #ffd24d; text-shadow: 0 0 12px rgba(255,210,80,.7); }
+    #boostWrap { right: 26px; bottom: 24px; width: 230px; text-align: right; }
+    #boostNum { font-size: 36px; font-weight: 800; color: #ffce54; text-shadow: 0 0 14px rgba(255,190,60,.55); }
+    #boostBar { height: 10px; background: rgba(255,255,255,.12); border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid rgba(255,255,255,.1); }
+    #boostFill { height: 100%; width: 33%; background: linear-gradient(90deg, #ff9a20, #ffd24d); border-radius: 5px; }
+    #legend { left: 18px; bottom: 16px; font-size: 12px; line-height: 1.6; color: #9fb2d8; background: rgba(8,12,24,.55); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(90,140,255,.2); }
+    #legend b { color: #e8f0ff; }
+    #center { top: 36%; left: 50%; transform: translate(-50%, -50%); font-size: 100px; font-weight: 900; text-shadow: 0 0 34px rgba(80,160,255,.85); opacity: 0; transition: opacity .12s; white-space: nowrap; }
+    #center.show { opacity: 1; }
+    #center.goal { color: #ffd24d; text-shadow: 0 0 44px rgba(255,190,60,.95); animation: pop .45s ease-out; }
+    #centerSub { top: 47%; left: 50%; transform: translate(-50%, -50%); font-size: 26px; font-weight: 700; color: #bcd0f5; opacity: 0; transition: opacity .12s; }
+    #centerSub.show { opacity: 1; }
+    @keyframes pop { 0% { transform: translate(-50%,-50%) scale(.4); } 70% { transform: translate(-50%,-50%) scale(1.12); } 100% { transform: translate(-50%,-50%) scale(1); } }
+    #overlay { inset: 0; background: rgba(4,6,14,.8); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; text-align: center; }
+    #overlay.show { display: flex; }
+    #overlayTitle { font-size: 68px; font-weight: 900; }
+    #overlaySub { font-size: 20px; color: #9fb2d8; }
+
+    /* ---------- menus ---------- */
+    #menuRoot { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; pointer-events: none; }
+    #menuRoot.show { display: flex; }
+    .panelBox { pointer-events: auto; background: rgba(7,11,24,.88); border: 1px solid rgba(90,140,255,.4); border-radius: 18px; padding: 30px 36px; width: 380px; max-height: 86vh; overflow-y: auto; backdrop-filter: blur(10px); color: #e8f0ff; text-align: center; box-shadow: 0 0 60px rgba(40,90,220,.25); }
+    .menuTitle { font-size: 42px; font-weight: 900; letter-spacing: 3px; margin-bottom: 2px; background: linear-gradient(90deg, #4db2ff, #ffce54); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .menuSub { font-size: 13px; color: #8fa4cc; margin-bottom: 22px; letter-spacing: 1px; }
+    .sectionTitle { font-size: 22px; font-weight: 800; margin-bottom: 16px; letter-spacing: 2px; }
+    .btn { display: block; width: 100%; margin: 9px 0; padding: 13px; font-size: 16px; font-weight: 700; letter-spacing: 1px; color: #e8f0ff; background: rgba(60,100,200,.22); border: 1px solid rgba(90,140,255,.45); border-radius: 10px; cursor: pointer; font-family: inherit; transition: background .12s, transform .06s; }
+    .btn:hover { background: rgba(80,130,255,.42); }
+    .btn:active { transform: scale(.98); }
+    .btn.primary { background: linear-gradient(90deg, #2b6cd4, #3f8cff); border-color: #6fb0ff; }
+    .btn.primary:hover { background: linear-gradient(90deg, #3579e0, #55a0ff); }
+    .setRow { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 10px 0; font-size: 14px; color: #bcd0f5; text-align: left; }
+    .setRow label { flex: 1; }
+    .setRow select, .setRow input { pointer-events: auto; }
+    .setRow select { background: #101a30; color: #e8f0ff; border: 1px solid rgba(90,140,255,.45); border-radius: 7px; padding: 6px 8px; font-family: inherit; font-size: 13px; min-width: 130px; }
+    .setRow input[type="color"] { width: 46px; height: 30px; border: 1px solid rgba(90,140,255,.45); border-radius: 6px; background: #101a30; padding: 2px; cursor: pointer; }
+    .setRow input[type="range"] { width: 130px; accent-color: #3f8cff; }
+    .setRow input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3f8cff; cursor: pointer; }
+    .setVal { font-size: 12px; color: #7f94bc; min-width: 30px; text-align: right; }
+    .menuHint { margin-top: 16px; font-size: 11px; color: #6d80a8; line-height: 1.6; }
+    .gpfocus { outline: 2px solid #6fb0ff !important; outline-offset: 2px; box-shadow: 0 0 14px rgba(90,160,255,.55) !important; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="scoreboard" class="hud">
+    <span id="scoreBlue" class="score">0</span>
+    <span id="timer">3:00</span>
+    <span id="scoreOrange" class="score">0</span>
+  </div>
+  <div id="boostWrap" class="hud">
+    <div id="boostNum">33</div>
+    <div id="boostBar"><div id="boostFill"></div></div>
+  </div>
+  <div id="legend" class="hud">
+    <b>W/S</b> drive &nbsp;·&nbsp; <b>A/D</b> steer &nbsp;·&nbsp; <b>Space</b> jump / flip &nbsp;·&nbsp; <b>Shift</b> boost &nbsp;·&nbsp; <b>Ctrl</b> slide<br>
+    <b>Q/E</b> air roll &nbsp;·&nbsp; <b>C</b> ball-cam &nbsp;·&nbsp; <b>R</b> reset &nbsp;·&nbsp; <b>P/Esc</b> pause &nbsp;·&nbsp; 🎮 <b>✕</b> jump <b>◯</b> boost <b>▢</b> slide
+  </div>
+  <div id="center" class="hud"></div>
+  <div id="centerSub" class="hud"></div>
+  <div id="overlay" class="hud">
+    <div id="overlayTitle"></div>
+    <div id="overlaySub"></div>
+  </div>
+  <div id="menuRoot"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
