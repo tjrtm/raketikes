@@ -9,7 +9,9 @@ npm install
 npm run dev
 ```
 
-Open the printed URL (defaults to `http://localhost:5199`). `npm run build` produces a static production build in `dist/`.
+Open the printed URL (Vite defaults to `http://localhost:5173`, or `http://127.0.0.1:5173` when run with `--host 127.0.0.1`). `npm run build` produces a static production build in `dist/`.
+
+The game starts directly in a match: the arena, car, ball, HUD, and countdown render immediately. Press `P` or `Esc` for pause/settings; use **Quit to Menu** from pause if you want Solo Practice or a different setup.
 
 ## Game modes
 
@@ -71,10 +73,9 @@ src/
   entities/         arena + goal sensors, car, ball, boost pads, environments, particles
   controls/         merged keyboard + gamepad input
   game/             match state machine, bot AI, settings store
+  gameblocks/       TypeScript ports of selected GameBlocks basis/smoothing modules
   ui/               HUD and menu system
 ```
-
-Handy details: goal sensors sit one ball-diameter behind the goal line so a goal only counts on *full* entry; the car's collider is a round cuboid that exactly matches its rounded visual shell; walls fade to near-transparent when you drive close to them; the bot has a layered anti-stuck watchdog (escape-reverse, then self-reset) so it never hangs.
 
 ## License
 

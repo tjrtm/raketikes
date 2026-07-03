@@ -17,6 +17,7 @@ dist/
 
 # tests
 coverage/
+artifacts/
 
 # machine-local tool config
 .claude/settings.local.json

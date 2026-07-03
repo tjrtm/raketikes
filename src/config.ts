@@ -1,6 +1,9 @@
+import { DEFAULT_WORLD_BASIS } from './gameblocks/modules/math/WorldBasis';
+
 // Central tuning constants. All physics feel values live here — tweak, reload, iterate.
 
 export const CONFIG = {
+  basis: DEFAULT_WORLD_BASIS,
   gravity: -32, // stronger than earth: snappy jumps, fast ball drops (arcade feel)
   step: 1 / 60,
 

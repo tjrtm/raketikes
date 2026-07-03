@@ -70,9 +70,9 @@ async function main() {
       menu.show('main');
     },
   });
-  kickoff();
-  hud.setInGame(false);
-  menu.show('main');
+  hud.setInGame(true);
+  menu.hide();
+  match.startGame('match');
 
   input.onPause = () => {
     if (match.state === 'menu') {

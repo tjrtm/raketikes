@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
+import { smoothingAlpha } from '../gameblocks/modules/math/ScalarUtils';
 
 export type CameraMode = 'chase' | 'ball';
+const BASIS = CONFIG.basis;
 
 /**
  * Spring-smoothed chase camera. Heading is smoothed separately from position so
@@ -13,9 +15,10 @@ export class ChaseCamera {
 
   private pos = new THREE.Vector3(0, 6, 40);
   private look = new THREE.Vector3(0, 1, 0);
-  private heading = new THREE.Vector3(0, 0, -1);
+  private heading = BASIS.forwardVector(new THREE.Vector3());
 
   private tmpFwd = new THREE.Vector3();
+  private tmpUp = new THREE.Vector3();
   private tmpDesired = new THREE.Vector3();
   private tmpLook = new THREE.Vector3();
 
@@ -24,7 +27,8 @@ export class ChaseCamera {
   }
 
   snapBehind(carPos: THREE.Vector3, carQuat: THREE.Quaternion) {
-    this.heading.set(0, 0, -1).applyQuaternion(carQuat).setY(0).normalize();
+    BASIS.forwardVector(this.heading).applyQuaternion(carQuat);
+    BASIS.flatten(this.heading).normalize();
     this.pos.copy(carPos).addScaledVector(this.heading, -11).add(new THREE.Vector3(0, 4.5, 0));
     this.look.copy(carPos);
   }
@@ -42,26 +46,28 @@ export class ChaseCamera {
 
     if (this.mode === 'chase') {
       // Follow the car's flattened forward; only track rotation quickly while grounded.
-      this.tmpFwd.set(0, 0, -1).applyQuaternion(carQuat);
-      this.tmpFwd.y = 0;
+      BASIS.forwardVector(this.tmpFwd).applyQuaternion(carQuat);
+      BASIS.flatten(this.tmpFwd);
       if (this.tmpFwd.lengthSq() > 0.05) {
         this.tmpFwd.normalize();
-        const rate = grounded ? 5.5 : 1.8;
-        this.heading.lerp(this.tmpFwd, 1 - Math.exp(-rate * dt)).normalize();
+        const lag = grounded ? 0.18 : 0.55;
+        this.heading.lerp(this.tmpFwd, smoothingAlpha(lag, dt)).normalize();
       }
       desired.copy(carPos).addScaledVector(this.heading, -10.5);
-      desired.y = carPos.y + 4.2;
-      lookTarget.copy(carPos).addScaledVector(this.heading, 5).add({ x: 0, y: 1.4, z: 0 } as THREE.Vector3);
+      BASIS.setHeight(desired, BASIS.upComponent(carPos) + 4.2);
+      lookTarget.copy(carPos)
+        .addScaledVector(this.heading, 5)
+        .addScaledVector(BASIS.upVector(this.tmpUp), 1.4);
     } else {
       // Ball-cam: camera sits on the ball->car line, keeping both in frame.
       this.tmpFwd.copy(carPos).sub(ballPos);
-      this.tmpFwd.y = 0;
-      if (this.tmpFwd.lengthSq() < 0.04) this.tmpFwd.set(0, 0, 1);
+      BASIS.flatten(this.tmpFwd);
+      if (this.tmpFwd.lengthSq() < 0.04) BASIS.forwardVector(this.tmpFwd).multiplyScalar(-1);
       this.tmpFwd.normalize();
       desired.copy(carPos).addScaledVector(this.tmpFwd, 9);
-      desired.y = carPos.y + 4;
+      BASIS.setHeight(desired, BASIS.upComponent(carPos) + 4);
       lookTarget.copy(ballPos);
-      lookTarget.y += 1;
+      BASIS.addHeight(lookTarget, 1);
     }
 
     // Never leave the arena or dip into the floor/goals.
@@ -71,8 +77,8 @@ export class ChaseCamera {
     desired.z = THREE.MathUtils.clamp(desired.z, -mz, mz);
     desired.y = THREE.MathUtils.clamp(desired.y, 1.6, CONFIG.arena.wallHeight - 2);
 
-    this.pos.lerp(desired, 1 - Math.exp(-6 * dt));
-    this.look.lerp(lookTarget, 1 - Math.exp(-10 * dt));
+    this.pos.lerp(desired, smoothingAlpha(1 / 6, dt));
+    this.look.lerp(lookTarget, smoothingAlpha(1 / 10, dt));
 
     camera.position.copy(this.pos);
     camera.lookAt(this.look);
