@@ -7,6 +7,7 @@ import type { Ball } from '../entities/ball';
 
 const L = CONFIG.arena.length;
 const W = CONFIG.arena.width;
+const BASIS = CONFIG.basis;
 
 export interface BotLevel {
   think: number;        // seconds between decisions
@@ -71,8 +72,8 @@ export class Bot {
     }
 
     // --- watchdog: flipped/wedged recovery ---
-    const up = this.tmpUp.set(0, 1, 0).applyQuaternion(bot.quaternion);
-    if (up.y < 0.3 && bot.speed < 3) {
+    const up = BASIS.upVector(this.tmpUp).applyQuaternion(bot.quaternion);
+    if (BASIS.upComponent(up) < 0.3 && bot.speed < 3) {
       this.flippedT += dt;
       if (this.flippedT > 1.6) {
         bot.safeReset();
@@ -118,10 +119,12 @@ export class Bot {
 
     const input = emptyInput();
     const pos = bot.position;
-    const fwd = this.tmpFwd.set(0, 0, -1).applyQuaternion(bot.quaternion).setY(0).normalize();
-    const right = this.tmpRight.set(-fwd.z, 0, fwd.x); // right = fwd x up, flattened
+    const fwd = BASIS.forwardVector(this.tmpFwd).applyQuaternion(bot.quaternion);
+    BASIS.flatten(fwd).normalize();
+    const right = BASIS.sideVector(fwd, 1, this.tmpRight).normalize();
 
-    const to = this.tmpDir.copy(this.target).sub(pos).setY(0);
+    const to = this.tmpDir.copy(this.target).sub(pos);
+    BASIS.flatten(to);
     const dist = to.length();
     if (dist > 0.5) to.normalize();
 

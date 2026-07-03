@@ -6,7 +6,8 @@ import { S } from '../game/settings';
 import { emptyInput, type CarInput } from '../controls/input';
 
 const C = CONFIG.car;
-const UP = new THREE.Vector3(0, 1, 0);
+const BASIS = CONFIG.basis;
+const UP = BASIS.upVector(new THREE.Vector3());
 const HITBOX_ROUND = 0.14; // collider corner radius — matches the rounded visual shell
 
 /**
@@ -118,9 +119,9 @@ export class Car {
     const input = this.input;
     const t = this.body.translation();
     const rot = this.quatCached();
-    const fwd = this.vFwd.set(0, 0, -1).applyQuaternion(rot);
-    const up = this.vUp.set(0, 1, 0).applyQuaternion(rot);
-    const right = this.vRight.set(1, 0, 0).applyQuaternion(rot);
+    const fwd = BASIS.forwardVector(this.vFwd).applyQuaternion(rot);
+    const up = BASIS.upVector(this.vUp).applyQuaternion(rot);
+    const right = BASIS.rightVector(this.vRight).applyQuaternion(rot);
     const lv = this.body.linvel();
     const vel = this.vVel.set(lv.x, lv.y, lv.z);
 
@@ -268,11 +269,17 @@ export class Car {
   /** Drop the car upright at its current spot (clamped into the field), keeping its heading. */
   safeReset() {
     const t = this.body.translation();
-    const x = THREE.MathUtils.clamp(t.x, -CONFIG.arena.width / 2 + 4, CONFIG.arena.width / 2 - 4);
-    const z = THREE.MathUtils.clamp(t.z, -CONFIG.arena.length / 2 + 4, CONFIG.arena.length / 2 - 4);
-    const fwd = this.vTmp.set(0, 0, -1).applyQuaternion(this.quatCached());
-    const yaw = Math.abs(fwd.x) + Math.abs(fwd.z) > 0.05 ? Math.atan2(-fwd.x, -fwd.z) : 0;
-    this.reset({ x, y: 1, z }, yaw);
+    let x = THREE.MathUtils.clamp(t.x, -CONFIG.arena.width / 2 + 5, CONFIG.arena.width / 2 - 5);
+    let z = THREE.MathUtils.clamp(t.z, -CONFIG.arena.length / 2 + 7, CONFIG.arena.length / 2 - 7);
+    const cornerX = CONFIG.arena.width / 2 - CONFIG.arena.cornerCut - 3;
+    const cornerZ = CONFIG.arena.length / 2 - CONFIG.arena.cornerCut - 3;
+    if (Math.abs(x) > cornerX && Math.abs(z) > cornerZ) {
+      x = Math.sign(x) * cornerX;
+      z = Math.sign(z) * cornerZ;
+    }
+    const fwd = BASIS.forwardVector(this.vTmp).applyQuaternion(this.quatCached());
+    const yaw = BASIS.planarLength(fwd) > 0.05 ? BASIS.forwardToYaw(fwd) : 0;
+    this.reset({ x, y: C.half.y + 0.75, z }, yaw);
   }
 }
 

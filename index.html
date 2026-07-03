@@ -54,6 +54,30 @@
     .setVal { font-size: 12px; color: #7f94bc; min-width: 30px; text-align: right; }
     .menuHint { margin-top: 16px; font-size: 11px; color: #6d80a8; line-height: 1.6; }
     .gpfocus { outline: 2px solid #6fb0ff !important; outline-offset: 2px; box-shadow: 0 0 14px rgba(90,160,255,.55) !important; }
+
+    @media (max-width: 700px) {
+      #scoreboard { top: 15px; gap: 12px; padding: 8px 18px; border-radius: 10px; }
+      .score { font-size: 30px; min-width: 34px; }
+      #timer { font-size: 24px; min-width: 62px; letter-spacing: 0; }
+      #boostWrap { right: 16px; bottom: 14px; width: 150px; }
+      #boostNum { font-size: 30px; }
+      #boostBar { height: 9px; }
+      #legend {
+        left: 12px;
+        right: 12px;
+        bottom: 76px;
+        max-width: calc(100vw - 24px);
+        box-sizing: border-box;
+        font-size: 11px;
+        line-height: 1.45;
+        padding: 8px 10px;
+        border-radius: 8px;
+      }
+      #center { font-size: 78px; top: 35%; }
+      #centerSub { font-size: 18px; width: calc(100vw - 32px); text-align: center; }
+      .panelBox { width: min(340px, calc(100vw - 28px)); padding: 24px 22px; border-radius: 14px; }
+      .menuTitle { font-size: 34px; }
+    }
   </style>
 </head>
 <body>
