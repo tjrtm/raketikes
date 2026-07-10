@@ -53,6 +53,14 @@
     .setRow input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3f8cff; cursor: pointer; }
     .setVal { font-size: 12px; color: #7f94bc; min-width: 30px; text-align: right; }
     .menuHint { margin-top: 16px; font-size: 11px; color: #6d80a8; line-height: 1.6; }
+    .mpJoinRow { display: flex; gap: 8px; margin: 9px 0; }
+    .mpCodeInput { flex: 1; min-width: 0; background: #101a30; color: #e8f0ff; border: 1px solid rgba(90,140,255,.45); border-radius: 10px; padding: 12px 14px; font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; text-align: center; pointer-events: auto; }
+    .mpJoinRow .btn { width: auto; padding: 13px 22px; }
+    .mpCode { font-size: 48px; font-weight: 900; letter-spacing: 8px; color: #ffce54; text-shadow: 0 0 20px rgba(255,190,60,.55); margin: 10px 0 4px; }
+    .mpLink { font-size: 12px; color: #8fa4cc; word-break: break-all; margin-bottom: 14px; user-select: text; pointer-events: auto; }
+    .mpWaiting { animation: mpPulse 1.6s ease-in-out infinite; }
+    .mpError { font-size: 15px; color: #ff7a7a; margin: 14px 0 18px; line-height: 1.5; }
+    @keyframes mpPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
     .gpfocus { outline: 2px solid #6fb0ff !important; outline-offset: 2px; box-shadow: 0 0 14px rgba(90,160,255,.55) !important; }
 
     @media (max-width: 700px) {

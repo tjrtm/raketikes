@@ -1,13 +1,16 @@
 import { DEFAULTS, S, updateSetting, type Settings } from '../game/settings';
 import { STADIUM_NAMES, type StadiumId } from '../entities/environments';
 
-export type MenuPanel = 'hidden' | 'main' | 'pause' | 'settings';
+export type MenuPanel = 'hidden' | 'main' | 'pause' | 'settings' | 'mp';
 
 export interface MenuCallbacks {
   onStart(mode: 'match' | 'practice'): void;
   onResume(): void;
   onRestart(): void;
   onQuit(): void;
+  onMpHost(): void;
+  onMpJoin(code: string): void;
+  onMpCancel(): void;
 }
 
 /**
@@ -19,6 +22,8 @@ const COLOR_PALETTE = ['#2fa3ff', '#ff8a2a', '#22d67c', '#ff2d6a', '#ffd24d', '#
 
 export class Menu {
   panel: MenuPanel = 'hidden';
+  /** Set while an online match is live: pause panel becomes a non-pausing menu. */
+  online = false;
   private root = document.getElementById('menuRoot')!;
   private returnTo: 'main' | 'pause' = 'main';
   private focusables: HTMLElement[] = [];
@@ -31,6 +36,7 @@ export class Menu {
     this.root.classList.add('show');
     if (panel === 'main') this.renderMain();
     else if (panel === 'pause') this.renderPause();
+    else if (panel === 'mp') this.renderMp();
     else this.renderSettings();
     this.collectFocusables();
   }
@@ -102,10 +108,14 @@ export class Menu {
     }
   }
 
-  /** Esc inside menus: settings -> parent menu; pause -> resume. */
+  /** Esc inside menus: settings -> parent menu; pause -> resume; mp -> main. */
   back() {
     if (this.panel === 'settings') this.show(this.returnTo);
     else if (this.panel === 'pause') this.cb.onResume();
+    else if (this.panel === 'mp') {
+      this.cb.onMpCancel();
+      this.show('main');
+    }
   }
 
   private btn(label: string, cls: string, onClick: () => void): HTMLButtonElement {
@@ -127,8 +137,9 @@ export class Menu {
   private renderMain() {
     this.returnTo = 'main';
     const box = this.box();
-    box.innerHTML = `<div class="menuTitle">ROCKET ARENA</div><div class="menuSub">CAR SOCCER · LOCAL v BOT</div>`;
+    box.innerHTML = `<div class="menuTitle">ROCKET ARENA</div><div class="menuSub">CAR SOCCER · VS BOT OR ONLINE 1v1</div>`;
     box.appendChild(this.btn('PLAY MATCH', 'primary', () => this.cb.onStart('match')));
+    box.appendChild(this.btn('MULTIPLAYER 1v1', '', () => this.show('mp')));
     box.appendChild(this.btn('SOLO PRACTICE', '', () => this.cb.onStart('practice')));
     box.appendChild(this.btn('SETTINGS', '', () => this.show('settings')));
     const hint = document.createElement('div');
@@ -140,11 +151,99 @@ export class Menu {
   private renderPause() {
     this.returnTo = 'pause';
     const box = this.box();
+    if (this.online) {
+      box.innerHTML = `<div class="sectionTitle">MENU</div><div class="menuSub">ONLINE MATCH — GAME KEEPS RUNNING</div>`;
+      box.appendChild(this.btn('BACK TO GAME', 'primary', () => this.cb.onResume()));
+      box.appendChild(this.btn('SETTINGS', '', () => this.show('settings')));
+      box.appendChild(this.btn('LEAVE MATCH', '', () => this.cb.onQuit()));
+      return;
+    }
     box.innerHTML = `<div class="sectionTitle">PAUSED</div>`;
     box.appendChild(this.btn('RESUME', 'primary', () => this.cb.onResume()));
     box.appendChild(this.btn('SETTINGS', '', () => this.show('settings')));
     box.appendChild(this.btn('RESTART', '', () => this.cb.onRestart()));
     box.appendChild(this.btn('QUIT TO MENU', '', () => this.cb.onQuit()));
+  }
+
+  // ---------- multiplayer ----------
+
+  private renderMp() {
+    const box = this.box();
+    box.innerHTML = `<div class="sectionTitle">MULTIPLAYER 1v1</div><div class="menuSub">PEER-TO-PEER — SHARE A CODE OR LINK</div>`;
+    box.appendChild(this.btn('HOST MATCH', 'primary', () => this.cb.onMpHost()));
+
+    const joinRow = document.createElement('div');
+    joinRow.className = 'mpJoinRow';
+    const codeInput = document.createElement('input');
+    codeInput.type = 'text';
+    codeInput.className = 'mpCodeInput';
+    codeInput.placeholder = 'ROOM CODE';
+    codeInput.maxLength = 8;
+    codeInput.autocapitalize = 'characters';
+    codeInput.spellcheck = false;
+    // keep game key handlers out of the text field; Enter joins directly
+    codeInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && codeInput.value.trim()) this.cb.onMpJoin(codeInput.value);
+    });
+    codeInput.addEventListener('keyup', (e) => e.stopPropagation());
+    const joinBtn = this.btn('JOIN', '', () => {
+      if (codeInput.value.trim()) this.cb.onMpJoin(codeInput.value);
+    });
+    joinBtn.style.margin = '0';
+    joinRow.appendChild(codeInput);
+    joinRow.appendChild(joinBtn);
+    box.appendChild(joinRow);
+
+    box.appendChild(this.btn('BACK', '', () => this.show('main')));
+    const hint = document.createElement('div');
+    hint.className = 'menuHint';
+    hint.textContent = 'Host is BLUE, guest is ORANGE. Match length uses the host’s setting.';
+    box.appendChild(hint);
+  }
+
+  /** Host is waiting: show the room code and a copyable invite link. */
+  showMpHosting(code: string) {
+    this.panel = 'mp';
+    this.root.classList.add('show');
+    const box = this.box();
+    const link = `${location.origin}${location.pathname}?join=${code}`;
+    box.innerHTML = `
+      <div class="sectionTitle">HOSTING</div>
+      <div class="menuSub">SEND THIS CODE OR LINK TO YOUR OPPONENT</div>
+      <div class="mpCode">${code}</div>
+      <div class="mpLink">${link}</div>
+      <div class="menuSub mpWaiting">WAITING FOR OPPONENT…</div>`;
+    box.appendChild(this.btn('COPY LINK', 'primary', () => {
+      navigator.clipboard?.writeText(link).catch(() => { /* clipboard unavailable */ });
+    }));
+    box.appendChild(this.btn('CANCEL', '', () => {
+      this.cb.onMpCancel();
+      this.show('mp');
+    }));
+    this.collectFocusables();
+  }
+
+  /** Guest: connecting spinner state. */
+  showMpConnecting(code: string) {
+    this.panel = 'mp';
+    this.root.classList.add('show');
+    const box = this.box();
+    box.innerHTML = `<div class="sectionTitle">JOINING ${code}</div><div class="menuSub mpWaiting">CONNECTING…</div>`;
+    box.appendChild(this.btn('CANCEL', '', () => {
+      this.cb.onMpCancel();
+      this.show('mp');
+    }));
+    this.collectFocusables();
+  }
+
+  showMpError(text: string) {
+    this.panel = 'mp';
+    this.root.classList.add('show');
+    const box = this.box();
+    box.innerHTML = `<div class="sectionTitle">MULTIPLAYER</div><div class="mpError">${text}</div>`;
+    box.appendChild(this.btn('BACK', 'primary', () => this.show('mp')));
+    this.collectFocusables();
   }
 
   private row(label: string, control: HTMLElement, valueEl?: HTMLElement): HTMLDivElement {

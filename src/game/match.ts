@@ -1,6 +1,7 @@
 import { CONFIG, TEAM, TEAM_NAME, type Team } from '../config';
 import { S } from './settings';
 import type { Hud } from '../ui/hud';
+import type { MatchSnap } from '../net/session';
 
 export type GameState = 'menu' | 'countdown' | 'playing' | 'goal' | 'ended';
 export type GameMode = 'match' | 'practice';
@@ -18,6 +19,8 @@ export class Match {
   timeLeft = CONFIG.match.lengthSec;
   overtime = false;
   lastScorer: Team = TEAM.BLUE;
+  /** Guest in an online match: state is mirrored from the host via netApply(). */
+  netFollow = false;
 
   private countdownT = CONFIG.match.countdownSec;
   private celebT = 0;
@@ -40,6 +43,7 @@ export class Match {
 
   startGame(mode: GameMode) {
     this.mode = mode;
+    this.netFollow = false;
     this.scores = [0, 0];
     this.timeLeft = S.matchLength;
     this.overtime = false;
@@ -53,6 +57,7 @@ export class Match {
   quitToMenu() {
     this.state = 'menu';
     this.paused = false;
+    this.netFollow = false;
     this.hud.setCenter('');
     this.hud.hideOverlay();
     this.onKickoff(); // tidy backdrop behind the menu
@@ -60,6 +65,16 @@ export class Match {
 
   update(dt: number) {
     if (this.paused) return;
+    if (this.netFollow) {
+      // host drives all transitions; locally we only fade the GO! flash and refresh the HUD
+      if (this.goFlashT > 0) {
+        this.goFlashT -= dt;
+        if (this.goFlashT <= 0 && this.state === 'playing') this.hud.setCenter('');
+      }
+      this.hud.setScore(this.scores[0], this.scores[1]);
+      this.hud.setTimer(this.timeLeft, this.overtime && this.state !== 'ended', false);
+      return;
+    }
 
     switch (this.state) {
       case 'menu':
@@ -127,13 +142,67 @@ export class Match {
 
   private end() {
     this.state = 'ended';
+    this.showEndOverlay();
+    this.onEnded?.();
+  }
+
+  private showEndOverlay() {
     this.hud.setCenter('');
     const [b, o] = this.scores;
     const winner: Team | null = b > o ? TEAM.BLUE : o > b ? TEAM.ORANGE : null;
     const title = winner === null ? 'DRAW' : `${TEAM_NAME[winner]} WINS`;
     const css = winner === TEAM.BLUE ? S.blueColor : winner === TEAM.ORANGE ? S.orangeColor : '#e8f0ff';
     this.hud.showOverlay(title, `Final score ${b} — ${o} · Enter = rematch · Esc = menu`, css);
-    this.onEnded?.();
+  }
+
+  // ---------------------------------------------------------------- online
+
+  /** Host: serialize the state the guest mirrors. */
+  snapshot(): MatchSnap {
+    return {
+      state: this.state,
+      scores: [this.scores[0], this.scores[1]],
+      timeLeft: this.timeLeft,
+      overtime: this.overtime,
+      countdown: this.countdownT,
+      lastScorer: this.lastScorer,
+    };
+  }
+
+  /** Guest: enter (or re-enter, on rematch) an online match as a follower. */
+  netStart() {
+    this.mode = 'match';
+    this.netFollow = true;
+    this.paused = false;
+    this.scores = [0, 0];
+    this.timeLeft = S.matchLength;
+    this.overtime = false;
+    this.state = 'countdown';
+    this.countdownT = CONFIG.match.countdownSec;
+    this.hud.hideOverlay();
+    this.hud.setCenter('');
+  }
+
+  /** Guest: apply a host state snapshot and mirror the HUD transitions. */
+  netApply(s: MatchSnap) {
+    if (!this.netFollow) return;
+    const prev = this.state;
+    this.scores = [s.scores[0], s.scores[1]];
+    this.timeLeft = s.timeLeft;
+    this.overtime = s.overtime;
+    this.lastScorer = s.lastScorer as Team;
+    this.state = s.state as GameState;
+
+    if (this.state === 'countdown') {
+      this.hud.setCenter(String(Math.max(1, Math.ceil(s.countdown))), this.overtime ? 'OVERTIME — next goal wins' : '');
+    } else if (this.state === 'playing' && prev === 'countdown') {
+      this.goFlashT = CONFIG.match.goFlashSec;
+      this.hud.setCenter('GO!', '', false);
+    } else if (this.state === 'goal') {
+      this.hud.setCenter('GOAL!', `${TEAM_NAME[this.lastScorer]} scores`, true);
+    } else if (this.state === 'ended' && prev !== 'ended') {
+      this.showEndOverlay();
+    }
   }
 
   restart() {

@@ -16,6 +16,7 @@ The game starts directly in a match: the arena, car, ball, HUD, and countdown re
 ## Game modes
 
 - **Play Match** — timed match (default 3:00) against a bot with three difficulty levels. Tied at zero? Overtime, golden goal.
+- **Multiplayer 1v1** — play a friend over the internet, peer-to-peer (WebRTC via PeerJS; the free PeerJS cloud broker is used for signaling only — no game server). One player picks **Host Match** and shares the 5-letter room code or the invite link (`…/?join=CODE`); the other joins and the match starts immediately. Host is BLUE, guest is ORANGE; match length uses the host's setting, game speed is locked to 1×, and there is no pause — opening the menu keeps the match running. Each player simulates their own car locally (zero input lag); the host's simulation owns the ball, the clock, and goal decisions.
 - **Solo Practice** — no clock, no opponent pressure; the bot parks by its goal while you practice shots on both ends.
 
 ## Controls
