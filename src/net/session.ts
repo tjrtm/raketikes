@@ -8,11 +8,12 @@ import type { Peer, DataConnection } from 'peerjs';
  * Two channels ride one RTCPeerConnection:
  *  - the PeerJS DataConnection (reliable, ordered) for discrete events
  *  - a raw "snap" RTCDataChannel ({ordered:false, maxRetransmits:0}) for
- *    car/ball/match snapshots, so a lost packet never stalls newer state
+ *    car/ball snapshots, so a lost packet never stalls newer state
  *    (PeerJS's own `reliable:false` only sets ordered:false — it still
- *    retransmits — hence the raw channel; DCEP negotiates it in-band with
- *    no extra ICE round). Falls back to the reliable channel if it never
- *    opens (sequence numbers make stale snaps harmless either way).
+ *    retransmits — hence the raw channel, negotiated out-of-band on a
+ *    fixed stream id over the same peer connection, no extra ICE round).
+ *    Falls back to the reliable channel if it never opens (sequence
+ *    numbers make stale snaps harmless either way).
  *
  * PeerJS itself is dynamically imported so the ~50 kB library is only
  * fetched when multiplayer is actually used.
@@ -64,6 +65,7 @@ export type NetRole = 'none' | 'host' | 'guest';
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const PEER_PREFIX = 'rocket-arena-v1-';
 const SNAP_CHANNEL = 'snap';
+const SNAP_CHANNEL_ID = 100; // fixed stream id, clear of PeerJS's in-band ids
 const CONNECT_TIMEOUT_MS = 20000;
 
 function randomCode(): string {
@@ -221,19 +223,19 @@ export class NetSession {
 
   /**
    * Unreliable snapshot channel over the already-established peer connection.
-   * The guest (dialer) creates it; the host accepts via ondatachannel.
+   * MUST be `negotiated` with a fixed id: an in-band (DCEP) channel fires
+   * ondatachannel on the remote, where PeerJS's negotiator adopts it as the
+   * DataConnection's own channel — silently rerouting all "reliable" sends
+   * onto it (verified in-browser). Negotiated channels are invisible to
+   * PeerJS; both sides just create the same stream id.
    */
   private setupSnapChannel(conn: DataConnection) {
     const pc = conn.peerConnection;
     if (!pc) return;
     try {
-      if (this.isGuest) {
-        this.wireSnap(pc.createDataChannel(SNAP_CHANNEL, { ordered: false, maxRetransmits: 0 }));
-      } else {
-        pc.addEventListener('datachannel', (e) => {
-          if (e.channel.label === SNAP_CHANNEL) this.wireSnap(e.channel);
-        });
-      }
+      this.wireSnap(pc.createDataChannel(SNAP_CHANNEL, {
+        negotiated: true, id: SNAP_CHANNEL_ID, ordered: false, maxRetransmits: 0,
+      }));
     } catch {
       this.snap = null; // snapshots fall back to the reliable channel
     }
