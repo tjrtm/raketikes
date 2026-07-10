@@ -63,12 +63,7 @@ async function main() {
     match,
     kickoff,
     onGoalFx(scorer: Team) {
-      const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
-      effects.burst(ball.position, color, 240, 20);
-      effects.shockwave(ball.position, color);
-      chaseCam.addShake(0.7);
-      ball.hit(1.2);
-      SFX.goal();
+      goalFx(scorer);
     },
     onOpponentJoined() {
       // host side: guest connected — start the online match
@@ -227,6 +222,14 @@ async function main() {
 
   // --- collision routing ---
   const tmpDir = new THREE.Vector3();
+  function goalFx(scorer: Team) {
+    const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
+    effects.burst(ball.position, color, 240, 20);
+    effects.shockwave(ball.position, color);
+    chaseCam.addShake(0.7);
+    ball.hit(1.2);
+    SFX.goal();
+  }
   const powerHit = (car: Car) => {
     // extra "power hit" impulse so contacts at speed feel punchy; bot power scales with difficulty
     const speed = car.speed;
@@ -260,12 +263,7 @@ async function main() {
     // goals are host-authoritative online: the guest waits for the host's goal event
     if (goalT && ballT && match.state === 'playing' && !net.isGuest) {
       const scorer: Team = goalT.team === TEAM.BLUE ? TEAM.ORANGE : TEAM.BLUE;
-      const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
-      effects.burst(ball.position, color, 240, 20);
-      effects.shockwave(ball.position, color);
-      chaseCam.addShake(0.7);
-      ball.hit(1.2);
-      SFX.goal();
+      goalFx(scorer);
       match.onGoal(scorer);
       net.broadcastGoal(scorer);
     }
@@ -282,14 +280,10 @@ async function main() {
       // (raw physics extrapolates it between packets — no fixedUpdate)
       const lc = localCar();
       const menuOpen = menu.panel !== 'hidden';
-      const inp = live && !menuOpen ? input.sample() : emptyInput();
-      if (inp.jumpPressed) SFX.jump();
-      lc.applyInput(inp);
+      lc.applyInput(live && !menuOpen ? input.sample() : emptyInput());
       lc.fixedUpdate(STEP, physics);
     } else {
-      const inp = live ? input.sample() : emptyInput();
-      if (inp.jumpPressed) SFX.jump();
-      carBlue.applyInput(inp);
+      carBlue.applyInput(live ? input.sample() : emptyInput());
       carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball, pads) : emptyInput());
       carBlue.fixedUpdate(STEP, physics);
       carOrange.fixedUpdate(STEP, physics);
@@ -348,8 +342,10 @@ async function main() {
           effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
           if (car === lc) SFX.land(car.justLanded / 20);
         }
+        if (car.justJumped && car === lc) SFX.jump();
       }
       car.justLanded = 0;
+      car.justJumped = false;
     }
     effects.update(match.paused ? 0 : dt);
 
@@ -399,10 +395,15 @@ async function main() {
   }, 50);
 
   window.addEventListener('beforeunload', () => net.leave());
+  // rAF (the only engine-audio driver) stops in hidden tabs — ramp the
+  // continuous layers down instead of droning at their last level
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) SFX.updateEngine(0, false, false);
+  });
 
   // debug handle for automated verification
   (window as unknown as Record<string, unknown>).__game = {
-    physics, ball, player: carBlue, bot: carOrange, match, chaseCam, pads, kickoff, menu, arena, effects, input, net,
+    physics, ball, player: carBlue, bot: carOrange, match, chaseCam, pads, kickoff, menu, arena, effects, input, net, rendering,
     getEnv: () => env,
     // deterministic sim driver for automated tests (tab-visibility independent)
     debugStep: (seconds: number) => {

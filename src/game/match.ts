@@ -231,6 +231,7 @@ export class Match {
       this.hud.setCenter('GOAL!', `${TEAM_NAME[this.lastScorer]} scores`, true);
     } else if (this.state === 'ended' && prev !== 'ended') {
       this.showEndOverlay();
+      SFX.crowd(0.6); // mirror the host's end-of-match crowd
     }
   }
 

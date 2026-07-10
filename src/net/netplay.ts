@@ -134,6 +134,9 @@ export class NetPlay {
   private pingT = 0;
   private seq = 0;
   private pingId = 0;
+  /** Kickoff epoch: stamped on outgoing snaps so pre-reset stragglers on the
+   *  unordered channel can't repopulate freshly cleared buffers. */
+  private epoch = 0;
 
   private carBuf = new SnapBuffer<CarSnap>();
   private ballBuf = new SnapBuffer<BodySnap>();
@@ -145,6 +148,9 @@ export class NetPlay {
 
   constructor(private d: NetPlayDeps) {
     this.session.onConnected = () => {
+      // fresh peer, fresh state: seq/clock/buffers from a previous session
+      // would otherwise reject or misplace everything the new opponent sends
+      this.resetSessionState();
       if (this.session.isHost) {
         this.session.send({ t: 'welcome', v: PROTOCOL_VERSION, matchLength: S.matchLength });
         this.d.onOpponentJoined();
@@ -180,6 +186,7 @@ export class NetPlay {
 
   broadcastKickoff() {
     if (this.session.isHost) {
+      this.epoch++;
       this.clearBuffers();
       this.session.send({ t: 'kickoff' });
     }
@@ -196,6 +203,18 @@ export class NetPlay {
   private clearBuffers() {
     this.carBuf.clear();
     this.ballBuf.clear();
+  }
+
+  private resetSessionState() {
+    this.carBuf = new SnapBuffer<CarSnap>();
+    this.ballBuf = new SnapBuffer<BodySnap>();
+    this.clock = new ClockSync();
+    this.seq = 0;
+    this.pingId = 0;
+    this.epoch = 0;
+    this.snapT = 0;
+    this.matchT = 0;
+    this.pingT = 0;
   }
 
   /** Called once per rendered frame; owns all send cadences + remote interpolation. */
@@ -222,9 +241,9 @@ export class NetPlay {
       if (this.snapT >= SNAP_INTERVAL) {
         this.snapT = 0;
         const at = now();
-        this.session.sendSnap({ t: 'car', seq: ++this.seq, at, s: carSnap(this.localCar()) });
+        this.session.sendSnap({ t: 'car', seq: ++this.seq, at, e: this.epoch, s: carSnap(this.localCar()) });
         if (this.session.isHost) {
-          this.session.sendSnap({ t: 'ball', seq: this.seq, at, s: bodySnap(this.d.ball.body) });
+          this.session.sendSnap({ t: 'ball', seq: this.seq, at, e: this.epoch, s: bodySnap(this.d.ball.body) });
         }
       }
       // render remote entities slightly in the past, interpolating between snaps
@@ -290,6 +309,7 @@ export class NetPlay {
         break;
       case 'kickoff':
         if (this.session.isGuest) {
+          this.epoch++;
           this.clearBuffers();
           this.d.kickoff();
         }
@@ -298,11 +318,12 @@ export class NetPlay {
         if (this.session.isGuest) this.d.onGoalFx(m.scorer as Team);
         break;
       case 'car':
+        if (m.e !== this.epoch) break; // straggler from before a kickoff reset
         this.clock.seed(m.at);
         this.carBuf.push(m.seq, m.at, m.s);
         break;
       case 'ball':
-        if (this.session.isGuest) {
+        if (this.session.isGuest && m.e === this.epoch) {
           this.clock.seed(m.at);
           this.ballBuf.push(m.seq, m.at, m.s);
         }

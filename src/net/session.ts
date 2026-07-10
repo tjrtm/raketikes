@@ -52,8 +52,8 @@ export type NetMsg =
   | { t: 'start' }                       // host -> guest: (re)start the match
   | { t: 'kickoff' }                     // host -> guest: reset cars & ball
   | { t: 'goal'; scorer: number }
-  | { t: 'car'; seq: number; at: number; s: CarSnap }   // both directions: sender's own car
-  | { t: 'ball'; seq: number; at: number; s: BodySnap } // host -> guest
+  | { t: 'car'; seq: number; at: number; e: number; s: CarSnap }   // both directions: sender's own car
+  | { t: 'ball'; seq: number; at: number; e: number; s: BodySnap } // host -> guest; e = kickoff epoch
   | { t: 'match'; s: MatchSnap }         // host -> guest
   | { t: 'ping'; id: number; at: number }               // both directions, reliable
   | { t: 'pong'; id: number; at: number; echo: number } // reply with sender clock
@@ -77,6 +77,12 @@ function randomCode(): string {
 export function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
+
+// Always kept in the ICE config so custom TURN entries EXTEND rather than
+// replace STUN (passing `config` to PeerJS wholly overrides its default).
+const DEFAULT_ICE: RTCIceServer[] = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] },
+];
 
 /**
  * ICE servers used for NAT traversal. The default is STUN-only (via the
@@ -135,7 +141,7 @@ export class NetSession {
   }
 
   private peerOptions() {
-    return this.iceServers ? { config: { iceServers: this.iceServers } } : {};
+    return this.iceServers ? { config: { iceServers: [...DEFAULT_ICE, ...this.iceServers] } } : {};
   }
 
   /** Open a room and wait for one guest. */
@@ -153,6 +159,7 @@ export class NetSession {
       this.peer.on('connection', (conn) => {
         if (this.conn) { conn.close(); return; } // room is full: 1v1 only
         this.wire(conn);
+        this.armConnectTimeout(); // a joiner whose ICE stalls must not wedge the room
       });
     }).catch(() => this.fail('Failed to load the multiplayer module — check your connection'));
   }
@@ -180,8 +187,10 @@ export class NetSession {
   /** If ICE never completes we'd otherwise spin forever on "CONNECTING…". */
   private armConnectTimeout() {
     this.clearConnectTimeout();
+    const conn = this.conn;
     this.connectTimer = setTimeout(() => {
-      if (!this.conn?.open && !this.closedByUs) this.fail(ICE_FAIL_TEXT);
+      if (this.closedByUs || this.conn?.open) return;
+      this.dropPendingConn(conn ?? this.conn);
     }, CONNECT_TIMEOUT_MS);
   }
 
@@ -194,31 +203,50 @@ export class NetSession {
 
   private wire(conn: DataConnection) {
     this.conn = conn;
+    let opened = false;
     conn.on('open', () => {
+      opened = true;
       this.clearConnectTimeout();
       this.setupSnapChannel(conn);
       this.onConnected?.();
     });
-    // distinct ICE failure (networks block P2P) vs. "room not found" (peer-unavailable)
+    // A connection that dies BEFORE opening is an ICE/negotiation failure
+    // (networks blocking P2P) — distinct from a mid-match drop. PeerJS emits
+    // 'error' + 'close' for these; 'iceStateChanged' is kept as a backstop.
+    const dead = () => {
+      if (this.closedByUs || this.conn !== conn) return;
+      if (opened) {
+        this.teardown();
+        this.onDisconnected?.();
+      } else if (this.isHost) {
+        this.dropPendingConn(conn); // keep the room open for the next joiner
+      } else {
+        this.fail(ICE_FAIL_TEXT);
+      }
+    };
+    conn.on('close', dead);
+    conn.on('error', dead);
     conn.on('iceStateChanged', (state) => {
-      if (state === 'failed' && !this.closedByUs) this.fail(ICE_FAIL_TEXT);
+      if (state === 'failed') dead();
     });
     conn.on('data', (data) => {
       const msg = data as NetMsg;
       if (msg && typeof msg === 'object' && 't' in msg) this.onMessage?.(msg);
     });
-    conn.on('close', () => {
-      if (!this.closedByUs) {
-        this.teardown();
-        this.onDisconnected?.();
+  }
+
+  /** Host: discard a joiner that never finished connecting; the room stays up. */
+  private dropPendingConn(conn: DataConnection | null) {
+    this.clearConnectTimeout();
+    if (this.isHost) {
+      if (conn && this.conn === conn) {
+        this.conn = null;
+        this.snap = null;
+        try { conn.close(); } catch { /* never opened */ }
       }
-    });
-    conn.on('error', () => {
-      if (!this.closedByUs) {
-        this.teardown();
-        this.onDisconnected?.();
-      }
-    });
+    } else {
+      this.fail(ICE_FAIL_TEXT);
+    }
   }
 
   /**

@@ -185,7 +185,8 @@ export class Bot {
     }
 
     // ball flying at our goal: intercept on the ball->goal line instead of chasing its tail
-    if (ballPos.z < 0 && bv.z < -8) {
+    const threat = ballPos.z < 0 && bv.z < -8;
+    if (threat) {
       const toGoalX = 0 - ballPos.x;
       const toGoalZ = -L / 2 - ballPos.z;
       const len = Math.hypot(toGoalX, toGoalZ) || 1;
@@ -198,7 +199,7 @@ export class Bot {
 
     // low on boost with no immediate threat: detour to the nearest active pad
     // (rookies don't manage boost — it's part of what makes them rookies)
-    if (pads && lvl.predict > 0 && bot.boost < 20 && (ballPos.z > 8 || dist0 > 26)) {
+    if (pads && lvl.predict > 0 && bot.boost < 20 && !threat && (ballPos.z > 8 || dist0 > 26)) {
       const pad = pads.nearestActive(botPos, this.padTarget);
       if (pad && Math.hypot(pad.x - botPos.x, pad.z - botPos.z) < 42) {
         this.target.copy(pad);

@@ -43,7 +43,9 @@ class SfxEngine {
   /** Create the context + persistent graph. Safe to call repeatedly. */
   private ensure(): AudioContext | null {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // covers 'suspended' AND iOS Safari's non-standard 'interrupted'
+      // (phone call / Siri / screen lock), which also needs an explicit resume
+      if (this.ctx.state !== 'running') void this.ctx.resume();
       return this.ctx;
     }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;

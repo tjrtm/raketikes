@@ -87,8 +87,13 @@ export class TouchControls {
     // or iOS Safari will scroll/zoom/rubber-band over the controls
     this.root.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
-    // auto-show on the first real touch anywhere; never triggers for mouse users
-    window.addEventListener('touchstart', () => this.show(), { once: true, passive: true });
+    // follow the input modality: any touch shows the overlay, going back to
+    // keyboard or mouse hides it again (touchscreen laptops, stray taps)
+    window.addEventListener('touchstart', () => this.show(), { passive: true });
+    window.addEventListener('keydown', () => this.hide());
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') this.hide();
+    });
   }
 
   private moveStick(x: number, y: number) {
@@ -148,5 +153,18 @@ export class TouchControls {
     this.visible = true;
     this.root.style.display = '';
     document.body.classList.add('touch'); // hides the keyboard legend, relocates the boost meter
+  }
+
+  hide() {
+    if (!this.visible) return;
+    this.visible = false;
+    this.root.style.display = 'none';
+    document.body.classList.remove('touch');
+    this.stickId = null;
+    this.steer = 0;
+    this.throttle = 0;
+    this.boost = false;
+    this.slide = false;
+    this.base.style.display = 'none';
   }
 }

@@ -3,14 +3,15 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, VignetteEffect,
 } from 'postprocessing';
-import { S } from '../game/settings';
+import { S, onSettingsChange } from '../game/settings';
 
 /**
  * Renderer + post pipeline. HDR (half-float) frame buffer -> bloom on
  * over-bright neon (HDR MeshBasicMaterial colors > 1 bloom selectively)
  * -> SMAA -> subtle vignette, tone mapped with AgX (better hue retention
- * on saturated neon than ACES). The `postfx` setting drops back to a plain
- * forward render for weak GPUs.
+ * on saturated neon than ACES). The `postfx` setting swaps to an SMAA-only
+ * pass for weak GPUs — antialiasing must survive, since the renderer
+ * itself runs without MSAA.
  */
 export class Rendering {
   renderer: THREE.WebGLRenderer;
@@ -21,8 +22,7 @@ export class Rendering {
   private composer: EffectComposer;
 
   constructor(canvas: HTMLCanvasElement) {
-    // AA comes from SMAA in the composer (the canvas keeps a depth buffer so
-    // the plain-render fallback still works when postfx is off)
+    // AA comes from SMAA in the composer — on both the full and lite paths
     this.renderer = new THREE.WebGLRenderer({
       canvas, antialias: false, stencil: false, powerPreference: 'high-performance',
     });
@@ -39,9 +39,16 @@ export class Rendering {
 
     // image-based lighting so car paint/ball PBR picks up soft reflections (no assets)
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const room = new RoomEnvironment();
+    this.scene.environment = pmrem.fromScene(room, 0.04).texture;
     this.scene.environmentIntensity = 0.35;
     pmrem.dispose();
+    room.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      for (const mat of mats) mat.dispose();
+    });
 
     this.camera = new THREE.PerspectiveCamera(S.cameraFov, window.innerWidth / window.innerHeight, 0.1, 900);
     this.camera.position.set(0, 6, 40);
@@ -71,7 +78,18 @@ export class Rendering {
       intensity: 1.1,
       radius: 0.72,
     });
-    this.composer.addPass(new EffectPass(this.camera, bloom, new SMAAEffect(), new VignetteEffect({ darkness: 0.42, offset: 0.28 })));
+    const passFull = new EffectPass(this.camera, bloom, new SMAAEffect(), new VignetteEffect({ darkness: 0.42, offset: 0.28 }));
+    const passLite = new EffectPass(this.camera, new SMAAEffect());
+    this.composer.addPass(passFull);
+    this.composer.addPass(passLite);
+    const applyPostfx = () => {
+      passFull.enabled = S.postfx;
+      passLite.enabled = !S.postfx;
+    };
+    applyPostfx();
+    onSettingsChange((key) => {
+      if (key === 'postfx') applyPostfx();
+    });
 
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -88,10 +106,6 @@ export class Rendering {
   }
 
   render(dt: number) {
-    if (S.postfx) {
-      this.composer.render(dt);
-    } else {
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.composer.render(dt);
   }
 }

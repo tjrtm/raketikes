@@ -229,7 +229,7 @@ function buildVisuals(scene: THREE.Scene): Arena {
       floorMat.needsUpdate = true;
       for (const [team, color] of [[TEAM.BLUE, blue], [TEAM.ORANGE, orange]] as const) {
         const refs = teamRefs[team];
-        refs.frame.color.setHex(color).multiplyScalar(2.2); // keep HDR bloom pop on recolor
+        refs.frame.color.setHex(color).multiplyScalar(HDR_TRIM); // keep HDR bloom pop on recolor
         refs.glow.color.setHex(color);
         refs.zone.color.setHex(color);
         refs.light.color.setHex(color);

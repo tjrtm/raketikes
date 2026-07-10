@@ -25,6 +25,8 @@ export class Car {
   grounded = false;
   /** Vertical impact speed on the tick the car touched down (consumed by fx). */
   justLanded = 0;
+  /** Set on the tick a jump/flip actually fired (consumed by fx/sfx). */
+  justJumped = false;
   /** True while powersliding/drifting with real lateral slip (drives smoke fx). */
   drifting = false;
   color: number;
@@ -221,8 +223,10 @@ export class Car {
       if (this.grounded) {
         this.impulse(up, C.jumpSpeed * this.mass);
         this.grounded = false;
+        this.justJumped = true;
       } else if (this.hasAirJump) {
         this.hasAirJump = false;
+        this.justJumped = true;
         const dir = this.vTmp.set(input.steer, 0, -input.throttle);
         if (dir.lengthSq() > 0.04) {
           dir.applyQuaternion(rot);
