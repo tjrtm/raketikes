@@ -1,5 +1,6 @@
 import { DEFAULTS, S, updateSetting, type Settings } from '../game/settings';
 import { STADIUM_NAMES, type StadiumId } from '../entities/environments';
+import { SFX } from '../audio/sfx';
 
 export type MenuPanel = 'hidden' | 'main' | 'pause' | 'settings' | 'mp';
 
@@ -122,7 +123,10 @@ export class Menu {
     const b = document.createElement('button');
     b.className = `btn ${cls}`;
     b.textContent = label;
-    b.addEventListener('click', onClick);
+    b.addEventListener('click', () => {
+      SFX.click();
+      onClick();
+    });
     return b;
   }
 
@@ -321,6 +325,28 @@ export class Menu {
     parts.checked = S.particles;
     parts.addEventListener('change', () => updateSetting('particles', parts.checked));
     box.appendChild(this.row('Particles', parts));
+
+    const volVal = document.createElement('span');
+    volVal.className = 'setVal';
+    volVal.textContent = String(S.volume);
+    const vol = document.createElement('input');
+    vol.type = 'range';
+    vol.min = '0';
+    vol.max = '100';
+    vol.step = '5';
+    vol.value = String(S.volume);
+    vol.addEventListener('input', () => {
+      volVal.textContent = vol.value;
+      updateSetting('volume', Number(vol.value));
+      SFX.click(); // audible feedback while dragging
+    });
+    box.appendChild(this.row('Volume', vol, volVal));
+
+    const mute = document.createElement('input');
+    mute.type = 'checkbox';
+    mute.checked = S.muted;
+    mute.addEventListener('change', () => updateSetting('muted', mute.checked));
+    box.appendChild(this.row('Mute', mute));
 
     box.appendChild(this.btn('RESET TO DEFAULTS', '', () => {
       (Object.keys(DEFAULTS) as Array<keyof Settings>).forEach((k) => updateSetting(k, DEFAULTS[k] as never));

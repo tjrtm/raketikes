@@ -12,6 +12,8 @@ export interface Settings {
   unlimitedBoost: boolean;
   cameraFov: number;
   particles: boolean;
+  volume: number;        // 0..100 master volume
+  muted: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -24,6 +26,8 @@ export const DEFAULTS: Settings = {
   unlimitedBoost: false,
   cameraFov: 72,
   particles: true,
+  volume: 70,
+  muted: false,
 };
 
 const KEY = 'rocket-arena-settings';

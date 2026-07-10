@@ -13,6 +13,7 @@ import { Bot, BOT_LEVELS } from './game/bot';
 import { Match } from './game/match';
 import { NetPlay } from './net/netplay';
 import { S, colorNum, onSettingsChange } from './game/settings';
+import { SFX } from './audio/sfx';
 import { Hud } from './ui/hud';
 import { Menu } from './ui/menu';
 import { CONFIG, KICKOFF, TEAM, type Team } from './config';
@@ -64,6 +65,7 @@ async function main() {
     onGoalFx(scorer: Team) {
       effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
       ball.hit(1.2);
+      SFX.goal();
     },
     onOpponentJoined() {
       // host side: guest connected — start the online match
@@ -237,6 +239,7 @@ async function main() {
       ball.body.applyImpulse({ x: tmpDir.x * mag, y: tmpDir.y * mag, z: tmpDir.z * mag }, true);
     }
     ball.hit(Math.min(1, speed / 28));
+    SFX.ballHit(Math.min(1, speed / 28));
     effects.burst(bp.addScaledVector(tmpDir, -CONFIG.ball.radius), 0xcfe4ff, Math.min(36, 6 + speed), 3 + speed * 0.3);
   };
 
@@ -255,10 +258,11 @@ async function main() {
       const scorer: Team = goalT.team === TEAM.BLUE ? TEAM.ORANGE : TEAM.BLUE;
       effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
       ball.hit(1.2);
+      SFX.goal();
       match.onGoal(scorer);
       net.broadcastGoal(scorer);
     }
-    if (padT && carT) pads.tryPickup(padT.index, carT.car as Car);
+    if (padT && carT && pads.tryPickup(padT.index, carT.car as Car) && carT.car === localCar()) SFX.pickup();
     if (carT && ballT) powerHit(carT.car as Car);
   };
 
@@ -271,10 +275,14 @@ async function main() {
       // (raw physics extrapolates it between packets — no fixedUpdate)
       const lc = localCar();
       const menuOpen = menu.panel !== 'hidden';
-      lc.applyInput(live && !menuOpen ? input.sample() : emptyInput());
+      const inp = live && !menuOpen ? input.sample() : emptyInput();
+      if (inp.jumpPressed) SFX.jump();
+      lc.applyInput(inp);
       lc.fixedUpdate(STEP, physics);
     } else {
-      carBlue.applyInput(live ? input.sample() : emptyInput());
+      const inp = live ? input.sample() : emptyInput();
+      if (inp.jumpPressed) SFX.jump();
+      carBlue.applyInput(inp);
       carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball) : emptyInput());
       carBlue.fixedUpdate(STEP, physics);
       carOrange.fixedUpdate(STEP, physics);
@@ -335,6 +343,8 @@ async function main() {
       chaseCam.update(rawDt, rendering.camera, lc.position, lc.quaternion, lc.grounded, ball.position);
     }
     hud.setBoost(lc.boost);
+    const engineOn = !match.paused && (match.state === 'playing' || match.state === 'goal' || match.state === 'countdown');
+    SFX.updateEngine(lc.speed, lc.boosting, engineOn);
     rendering.render();
     requestAnimationFrame(frame);
   };

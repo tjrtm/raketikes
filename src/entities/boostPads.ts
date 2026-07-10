@@ -53,13 +53,14 @@ export class BoostPads {
     });
   }
 
-  /** Called from the collision handler on car-pad intersection. */
-  tryPickup(index: number, car: Car): void {
+  /** Called from the collision handler on car-pad intersection. Returns true on pickup. */
+  tryPickup(index: number, car: Car): boolean {
     const pad = this.pads[index];
-    if (!pad || !pad.active || car.boost >= CONFIG.boost.max) return;
+    if (!pad || !pad.active || car.boost >= CONFIG.boost.max) return false;
     car.addBoost(CONFIG.boost.padAmount);
     pad.active = false;
     pad.timer = CONFIG.boost.padCooldown;
+    return true;
   }
 
   fixedUpdate(dt: number) {
