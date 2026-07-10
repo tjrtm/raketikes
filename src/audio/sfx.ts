@@ -252,6 +252,25 @@ class SfxEngine {
     osc.stop(t + 0.16);
   }
 
+  /** Landing thud; strength ~ vertical impact speed 0..1. */
+  land(strength: number) {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || !this.noiseBuf) return;
+    const t = ctx.currentTime;
+    const k = Math.min(strength, 1);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 320;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.3 * k, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    src.connect(lp).connect(g).connect(this.master);
+    src.start(t, Math.random());
+    src.stop(t + 0.14);
+  }
+
   /** Jump/flip whoosh. */
   jump() {
     const ctx = this.ctx;

@@ -326,6 +326,12 @@ export class Menu {
     parts.addEventListener('change', () => updateSetting('particles', parts.checked));
     box.appendChild(this.row('Particles', parts));
 
+    const fx = document.createElement('input');
+    fx.type = 'checkbox';
+    fx.checked = S.postfx;
+    fx.addEventListener('change', () => updateSetting('postfx', fx.checked));
+    box.appendChild(this.row('Glow effects (bloom)', fx));
+
     const volVal = document.createElement('span');
     volVal.className = 'setVal';
     volVal.textContent = String(S.volume);

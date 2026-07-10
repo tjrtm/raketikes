@@ -1,6 +1,6 @@
 # Rocket Arena
 
-A browser-based 3D car-soccer game in the spirit of Rocket League. Three.js rendering, Rapier physics, TypeScript, no assets — everything is procedural. Drive a rocket car, boost, jump, flip, and knock a giant ball into the opponent's goal inside a glass-domed stadium.
+A browser-based 3D car-soccer game in the spirit of Rocket League. Three.js rendering (HDR bloom + SMAA post pipeline), Rapier physics, procedural WebAudio sound, TypeScript, no assets — everything is procedural. Drive a rocket car, boost, jump, flip, and knock a giant ball into the opponent's goal inside a glass-domed stadium. Playable with keyboard, gamepad, or touch.
 
 ## Quick start
 
@@ -52,6 +52,10 @@ The game starts directly in a match: the arena, car, ball, HUD, and countdown re
 
 Menus are fully navigable with the controller: D-pad or left stick to move focus, ✕/Enter to select, ◯/Esc to go back, left/right to adjust a setting's value.
 
+### Touch (phones / tablets)
+
+Touch controls appear automatically on the first touch: a virtual stick on the left half of the screen (steer + throttle; doubles as air pitch/yaw, and as air roll while SLIDE is held) plus JUMP / BOOST / SLIDE / CAM buttons on the right, with pause and reset in the top corner.
+
 ## Settings
 
 All settings persist in `localStorage` and apply live:
@@ -62,6 +66,8 @@ All settings persist in `localStorage` and apply live:
 - **Game speed** — 0.75x / 1x / 1.25x global time scale
 - **Car colors** — separate pickers for you and the bot (recolors cars, goals, trim, HUD)
 - **Unlimited boost**, **camera FOV**, **particle effects** toggle
+- **Glow effects** — the bloom/SMAA post pipeline; turn off for weak GPUs
+- **Volume / mute** — all sound is synthesized live (engine, boost roar, ball impacts, goal explosion + crowd, countdown, UI)
 
 ## Multiplayer connectivity (TURN / strict NATs)
 

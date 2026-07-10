@@ -12,6 +12,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
     "peerjs": "^1.5.5",
+    "postprocessing": "^6.39.2",
     "three": "^0.185.1"
   },
   "devDependencies": {

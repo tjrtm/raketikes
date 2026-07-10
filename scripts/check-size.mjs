@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 
 const BUDGETS_KB = {
   index: 120,    // app code
-  three: 160,    // three.js vendor chunk
+  three: 220,    // three.js + pmndrs/postprocessing vendor chunk
   rapier: 800,   // rapier wasm-in-js (compat) chunk
   bundler: 40,   // peerjs (lazy-loaded)
 };

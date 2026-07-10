@@ -44,7 +44,7 @@ export class BoostPads {
 
       const orb = new THREE.Mesh(
         new THREE.SphereGeometry(0.55, 18, 14),
-        new THREE.MeshBasicMaterial({ color: 0xffd66e }),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd66e).multiplyScalar(2.4) }),
       );
       orb.position.set(p.x, 1.1, p.z);
       scene.add(orb);
@@ -72,6 +72,23 @@ export class BoostPads {
     }
   }
 
+  /** Position of the nearest active pad, or null (bot boost-management). */
+  nearestActive(pos: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 | null {
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.pads.length; i++) {
+      if (!this.pads[i].active) continue;
+      const p = POSITIONS[i];
+      const d = (p.x - pos.x) * (p.x - pos.x) + (p.z - pos.z) * (p.z - pos.z);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    if (best < 0) return null;
+    return out.set(POSITIONS[best].x, 0, POSITIONS[best].z);
+  }
+
   sync(time: number) {
     for (const pad of this.pads) {
       const discMat = pad.disc.material as THREE.MeshBasicMaterial;
@@ -80,7 +97,7 @@ export class BoostPads {
         pad.orb.position.y = 1.1 + Math.sin(time * 2.4) * 0.15;
         pad.orb.rotation.y = time * 1.5;
         discMat.opacity = 0.65 + Math.sin(time * 3) * 0.2;
-        discMat.color.setHex(0xffc23d);
+        discMat.color.setHex(0xffc23d).multiplyScalar(1.6);
       } else {
         pad.orb.visible = false;
         discMat.opacity = 0.12;

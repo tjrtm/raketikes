@@ -63,7 +63,10 @@ async function main() {
     match,
     kickoff,
     onGoalFx(scorer: Team) {
-      effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
+      const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
+      effects.burst(ball.position, color, 240, 20);
+      effects.shockwave(ball.position, color);
+      chaseCam.addShake(0.7);
       ball.hit(1.2);
       SFX.goal();
     },
@@ -240,6 +243,7 @@ async function main() {
     }
     ball.hit(Math.min(1, speed / 28));
     SFX.ballHit(Math.min(1, speed / 28));
+    if (speed > 20 && car === localCar()) chaseCam.addShake(Math.min(0.35, speed / 110));
     effects.burst(bp.addScaledVector(tmpDir, -CONFIG.ball.radius), 0xcfe4ff, Math.min(36, 6 + speed), 3 + speed * 0.3);
   };
 
@@ -256,7 +260,10 @@ async function main() {
     // goals are host-authoritative online: the guest waits for the host's goal event
     if (goalT && ballT && match.state === 'playing' && !net.isGuest) {
       const scorer: Team = goalT.team === TEAM.BLUE ? TEAM.ORANGE : TEAM.BLUE;
-      effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
+      const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
+      effects.burst(ball.position, color, 240, 20);
+      effects.shockwave(ball.position, color);
+      chaseCam.addShake(0.7);
       ball.hit(1.2);
       SFX.goal();
       match.onGoal(scorer);
@@ -283,7 +290,7 @@ async function main() {
       const inp = live ? input.sample() : emptyInput();
       if (inp.jumpPressed) SFX.jump();
       carBlue.applyInput(inp);
-      carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball) : emptyInput());
+      carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball, pads) : emptyInput());
       carBlue.fixedUpdate(STEP, physics);
       carOrange.fixedUpdate(STEP, physics);
     }
@@ -324,13 +331,25 @@ async function main() {
     carBlue.sync(dt);
     carOrange.sync(dt);
     ball.sync(dt);
+    if (match.physicsActive()) {
+      const bv = ball.body.linvel();
+      const bSpeed = Math.hypot(bv.x, bv.y, bv.z);
+      if (bSpeed > 22) effects.ballTrail(ball.position, tmpDir.set(bv.x, bv.y, bv.z));
+    }
     pads.sync(now / 1000);
     const lc = localCar();
     arena.update(rawDt, lc.position);
     for (const car of [carBlue, carOrange]) {
-      if (car.boosting && match.physicsActive()) {
-        effects.trail(car.nozzle(nozzlePos), car.backDir(backDir), car.color);
+      if (match.physicsActive()) {
+        if (car.boosting) effects.trail(car.nozzle(nozzlePos), car.backDir(backDir), car.color);
+        if (car.drifting) effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+        if (car.justLanded > 7) {
+          effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+          effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+          if (car === lc) SFX.land(car.justLanded / 20);
+        }
       }
+      car.justLanded = 0;
     }
     effects.update(match.paused ? 0 : dt);
 
@@ -339,13 +358,18 @@ async function main() {
       menuOrbit += rawDt * 0.12;
       rendering.camera.position.set(Math.cos(menuOrbit) * 42, 17, Math.sin(menuOrbit) * 42);
       rendering.camera.lookAt(0, 2, 0);
+      rendering.setFov(S.cameraFov);
     } else {
       chaseCam.update(rawDt, rendering.camera, lc.position, lc.quaternion, lc.grounded, ball.position);
+      // speed sells through FOV: widen toward supersonic and while boosting
+      const speedFov = THREE.MathUtils.clamp((lc.speed - 28) / 18, 0, 1) * 7 + (lc.boosting ? 3 : 0);
+      const targetFov = S.cameraFov + (match.physicsActive() ? speedFov : 0);
+      rendering.setFov(rendering.camera.fov + (targetFov - rendering.camera.fov) * Math.min(1, rawDt * 5));
     }
     hud.setBoost(lc.boost);
     const engineOn = !match.paused && (match.state === 'playing' || match.state === 'goal' || match.state === 'countdown');
     SFX.updateEngine(lc.speed, lc.boosting, engineOn);
-    rendering.render();
+    rendering.render(rawDt);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

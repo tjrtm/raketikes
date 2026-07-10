@@ -4,6 +4,7 @@ import { S } from './settings';
 import { emptyInput, type CarInput } from '../controls/input';
 import type { Car } from '../entities/car';
 import type { Ball } from '../entities/ball';
+import type { BoostPads } from '../entities/boostPads';
 
 const L = CONFIG.arena.length;
 const W = CONFIG.arena.width;
@@ -65,7 +66,7 @@ export class Bot {
     this.flippedT = 0;
   }
 
-  update(dt: number, bot: Car, ball: Ball): CarInput {
+  update(dt: number, bot: Car, ball: Ball, pads?: BoostPads): CarInput {
     if (this.reactionT > 0) {
       this.reactionT -= dt;
       return emptyInput();
@@ -114,7 +115,7 @@ export class Bot {
     this.thinkT -= dt;
     if (this.thinkT <= 0) {
       this.thinkT = this.level.think + Math.random() * 0.08;
-      this.think(bot, ball);
+      this.think(bot, ball, pads);
     }
 
     const input = emptyInput();
@@ -148,7 +149,9 @@ export class Bot {
     return input;
   }
 
-  private think(bot: Car, ball: Ball) {
+  private padTarget = new THREE.Vector3();
+
+  private think(bot: Car, ball: Ball, pads?: BoostPads) {
     const lvl = this.level;
     const botPos = bot.position;
 
@@ -179,6 +182,27 @@ export class Bot {
     // if the ball is behind us (toward our own -z goal), retreat to a save position
     if (ballPos.z < botPos.z - 3) {
       this.target.set(ballPos.x * 0.6, 0, Math.max(-L / 2 + 6, ballPos.z - 9));
+    }
+
+    // ball flying at our goal: intercept on the ball->goal line instead of chasing its tail
+    if (ballPos.z < 0 && bv.z < -8) {
+      const toGoalX = 0 - ballPos.x;
+      const toGoalZ = -L / 2 - ballPos.z;
+      const len = Math.hypot(toGoalX, toGoalZ) || 1;
+      this.target.set(
+        ballPos.x + (toGoalX / len) * 6,
+        0,
+        Math.max(-L / 2 + 5, ballPos.z + (toGoalZ / len) * 6),
+      );
+    }
+
+    // low on boost with no immediate threat: detour to the nearest active pad
+    // (rookies don't manage boost — it's part of what makes them rookies)
+    if (pads && lvl.predict > 0 && bot.boost < 20 && (ballPos.z > 8 || dist0 > 26)) {
+      const pad = pads.nearestActive(botPos, this.padTarget);
+      if (pad && Math.hypot(pad.x - botPos.x, pad.z - botPos.z) < 42) {
+        this.target.copy(pad);
+      }
     }
 
     // never aim outside the drivable field

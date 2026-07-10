@@ -16,6 +16,7 @@ export class ChaseCamera {
   private pos = new THREE.Vector3(0, 6, 40);
   private look = new THREE.Vector3(0, 1, 0);
   private heading = BASIS.forwardVector(new THREE.Vector3());
+  private shake = 0;
 
   private tmpFwd = new THREE.Vector3();
   private tmpUp = new THREE.Vector3();
@@ -24,6 +25,11 @@ export class ChaseCamera {
 
   toggle() {
     this.mode = this.mode === 'chase' ? 'ball' : 'chase';
+  }
+
+  /** Impact feedback: brief decaying positional jitter (goals, hard hits). */
+  addShake(strength: number) {
+    this.shake = Math.min(1.2, this.shake + strength);
   }
 
   snapBehind(carPos: THREE.Vector3, carQuat: THREE.Quaternion) {
@@ -81,6 +87,15 @@ export class ChaseCamera {
     this.look.lerp(lookTarget, smoothingAlpha(1 / 10, dt));
 
     camera.position.copy(this.pos);
+    if (this.shake > 0.005) {
+      const s = this.shake * 0.28;
+      camera.position.x += (Math.random() - 0.5) * s;
+      camera.position.y += (Math.random() - 0.5) * s;
+      camera.position.z += (Math.random() - 0.5) * s;
+      this.shake *= Math.exp(-7 * dt);
+    } else {
+      this.shake = 0;
+    }
     camera.lookAt(this.look);
   }
 }
