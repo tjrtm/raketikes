@@ -63,6 +63,32 @@ All settings persist in `localStorage` and apply live:
 - **Car colors** — separate pickers for you and the bot (recolors cars, goals, trim, HUD)
 - **Unlimited boost**, **camera FOV**, **particle effects** toggle
 
+## Multiplayer connectivity (TURN / strict NATs)
+
+Multiplayer is pure P2P: the free PeerJS cloud broker handles signaling, then game
+traffic flows directly between the two browsers over WebRTC. Two channels share one
+peer connection — a reliable one for events (start, kickoff, goals) and an
+unreliable/unordered one for 30 Hz state snapshots, with remote entities rendered
+~100 ms in the past and interpolated between snapshots.
+
+Direct connections work for most home networks (STUN), but peer pairs behind
+**symmetric/strict NATs** (some mobile carriers, corporate networks) cannot punch
+through and need a **TURN relay**. If that's your situation the join screen will say
+so explicitly ("your networks likely block P2P") instead of spinning forever.
+
+To add a TURN server, provide standard [RTCIceServer](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers) entries at build time:
+
+```sh
+VITE_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:your.relay:443","username":"u","credential":"c"}]' npm run build
+```
+
+or at runtime, before hosting/joining: `game.net.session.iceServers = [...]` (the
+game object is exposed as `window.__game`). Options:
+
+- **[Metered Open Relay](https://www.metered.ca/tools/openrelay/)** — free 20 GB/month TURN tier; credentials come from a client-side fetch, so it works on a static deployment (GitHub Pages) with no backend.
+- **Self-hosted** — run [coturn](https://github.com/coturn/coturn) on any VPS (`turnserver --lt-cred-mech --user=u:c --realm=yourdomain`), and optionally your own [PeerServer](https://github.com/peers/peerjs-server) instead of the cloud broker for signaling.
+- **[Cloudflare Realtime TURN](https://developers.cloudflare.com/realtime/turn/)** — 1 TB/month free, but minting credentials requires a secret, so you need a tiny worker/backend.
+
 ## Project structure
 
 ```

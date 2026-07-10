@@ -1,5 +1,6 @@
 import { CONFIG, TEAM, TEAM_NAME, type Team } from '../config';
 import { S } from './settings';
+import { SFX } from '../audio/sfx';
 import type { Hud } from '../ui/hud';
 import type { MatchSnap } from '../net/session';
 
@@ -25,6 +26,7 @@ export class Match {
   private countdownT = CONFIG.match.countdownSec;
   private celebT = 0;
   private goFlashT = 0;
+  private lastBeepN = 0; // last countdown number a tick was played for
 
   onEnded?: () => void;
 
@@ -66,10 +68,14 @@ export class Match {
   update(dt: number) {
     if (this.paused) return;
     if (this.netFollow) {
-      // host drives all transitions; locally we only fade the GO! flash and refresh the HUD
+      // host drives all transitions; locally we fade the GO! flash, run the
+      // clock between 10 Hz snapshots (netApply only corrects drift), and refresh the HUD
       if (this.goFlashT > 0) {
         this.goFlashT -= dt;
         if (this.goFlashT <= 0 && this.state === 'playing') this.hud.setCenter('');
+      }
+      if (this.state === 'playing' && !this.overtime) {
+        this.timeLeft = Math.max(0, this.timeLeft - dt);
       }
       this.hud.setScore(this.scores[0], this.scores[1]);
       this.hud.setTimer(this.timeLeft, this.overtime && this.state !== 'ended', false);
@@ -85,8 +91,14 @@ export class Match {
           this.state = 'playing';
           this.goFlashT = CONFIG.match.goFlashSec;
           this.hud.setCenter('GO!', '', false);
+          SFX.goBeep();
         } else {
-          this.hud.setCenter(String(Math.ceil(this.countdownT)), this.overtime ? 'OVERTIME — next goal wins' : '');
+          const n = Math.ceil(this.countdownT);
+          this.hud.setCenter(String(n), this.overtime ? 'OVERTIME — next goal wins' : '');
+          if (n !== this.lastBeepN) {
+            this.lastBeepN = n;
+            SFX.countdownBeep();
+          }
         }
         break;
       }
@@ -143,6 +155,7 @@ export class Match {
   private end() {
     this.state = 'ended';
     this.showEndOverlay();
+    SFX.crowd(0.6);
     this.onEnded?.();
   }
 
@@ -183,21 +196,37 @@ export class Match {
     this.hud.setCenter('');
   }
 
-  /** Guest: apply a host state snapshot and mirror the HUD transitions. */
-  netApply(s: MatchSnap) {
+  /**
+   * Guest: apply a host state snapshot and mirror the HUD transitions.
+   * oneWay is the estimated transit latency (s): the host clock read that far
+   * in the past. The local clock keeps ticking between snapshots; we only snap
+   * to the corrected host value when drift exceeds the display resolution.
+   */
+  netApply(s: MatchSnap, oneWay = 0) {
     if (!this.netFollow) return;
     const prev = this.state;
     this.scores = [s.scores[0], s.scores[1]];
-    this.timeLeft = s.timeLeft;
+    const corrected = s.state === 'playing' && !s.overtime
+      ? Math.max(0, s.timeLeft - oneWay)
+      : s.timeLeft;
+    if (Math.abs(corrected - this.timeLeft) > 0.35 || s.state !== 'playing') {
+      this.timeLeft = corrected;
+    }
     this.overtime = s.overtime;
     this.lastScorer = s.lastScorer as Team;
     this.state = s.state as GameState;
 
     if (this.state === 'countdown') {
-      this.hud.setCenter(String(Math.max(1, Math.ceil(s.countdown))), this.overtime ? 'OVERTIME — next goal wins' : '');
+      const n = Math.max(1, Math.ceil(s.countdown));
+      this.hud.setCenter(String(n), this.overtime ? 'OVERTIME — next goal wins' : '');
+      if (n !== this.lastBeepN) {
+        this.lastBeepN = n;
+        SFX.countdownBeep();
+      }
     } else if (this.state === 'playing' && prev === 'countdown') {
       this.goFlashT = CONFIG.match.goFlashSec;
       this.hud.setCenter('GO!', '', false);
+      SFX.goBeep();
     } else if (this.state === 'goal') {
       this.hud.setCenter('GOAL!', `${TEAM_NAME[this.lastScorer]} scores`, true);
     } else if (this.state === 'ended' && prev !== 'ended') {
