@@ -11,6 +11,8 @@ export function emptyInput(): CarInput {
   return { throttle: 0, steer: 0, roll: 0, boost: false, slide: false, jumpPressed: false };
 }
 
+import { TouchControls } from './touch';
+
 const CAPTURED = ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 const dz = (v: number) => (Math.abs(v) > 0.14 ? v : 0);
@@ -31,6 +33,7 @@ export class InputManager {
   private jumpQueued = false;
   private padPrev = new Map<number, boolean>();
   private stickNavPrev = { x: 0, y: 0 };
+  readonly touch = new TouchControls();
 
   onPause?: () => void;
   onCameraToggle?: () => void;
@@ -56,6 +59,15 @@ export class InputManager {
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
+
+    // touch buttons mirror the gamepad Cross/Triangle/Start/Share routing
+    this.touch.onJump = () => {
+      this.jumpQueued = true;
+      this.onPrimary?.();
+    };
+    this.touch.onCam = () => this.onCameraToggle?.();
+    this.touch.onPause = () => this.onPause?.();
+    this.touch.onReset = () => this.onResetCar?.();
   }
 
   private pad(): Gamepad | null {
@@ -124,6 +136,13 @@ export class InputManager {
       roll = clamp(roll + ((gp.buttons[5]?.pressed ? 1 : 0) - (gp.buttons[4]?.pressed ? 1 : 0)));
       boost = boost || (gp.buttons[1]?.pressed ?? false);          // Circle
       slide = slide || (gp.buttons[2]?.pressed ?? false);          // Square
+    }
+
+    if (this.touch.visible) {
+      throttle = clamp(throttle + dz(this.touch.throttle));
+      steer = clamp(steer + dz(this.touch.steer));
+      boost = boost || this.touch.boost;
+      slide = slide || this.touch.slide;
     }
 
     const input: CarInput = { throttle, steer, roll, boost, slide, jumpPressed: this.jumpQueued };
