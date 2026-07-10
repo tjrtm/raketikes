@@ -6,6 +6,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "strict": true,
     "skipLibCheck": true,
+    "types": ["vite/client"],
     "noEmit": true,
     "isolatedModules": true
   },
