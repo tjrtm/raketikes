@@ -86,7 +86,7 @@ export class Ball {
     this.mesh.position.set(t.x, t.y, t.z);
     this.mesh.quaternion.set(r.x, r.y, r.z, r.w);
     this.flash = Math.max(0, this.flash - dt * 2.5);
-    this.mat.emissiveIntensity = this.flash * 2.2; // HDR: strong hits push past the bloom threshold
+    this.mat.emissiveIntensity = this.flash * 1.5; // HDR: strong hits push past the bloom threshold
   }
 
   reset() {
