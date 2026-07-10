@@ -168,7 +168,9 @@ function buildVisuals(scene: THREE.Scene): Arena {
     }
   }
 
-  const trimMat = new THREE.MeshBasicMaterial({ color: 0x35e0ff });
+  // HDR colors (>1) so only the neon pops through the bloom threshold
+  const HDR_TRIM = 2.2;
+  const trimMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x35e0ff).multiplyScalar(HDR_TRIM) });
   const sideSegW = (W - G.width) / 2;
   const teamRefs: Record<Team, { frame: THREE.MeshBasicMaterial; glow: THREE.MeshBasicMaterial; zone: THREE.MeshBasicMaterial; light: THREE.PointLight }> = {} as never;
 
@@ -187,7 +189,7 @@ function buildVisuals(scene: THREE.Scene): Arena {
     fadeGroups.push({ mat, distance: (p) => Math.abs(p.z - sz * (L / 2)) });
 
     // glowing goal frame + glow plane + light + floor zone (team-colored, recolorable)
-    const frameMat = new THREE.MeshBasicMaterial({ color });
+    const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(HDR_TRIM) });
     addBox(G.width + 1.2, 0.6, 0.7, 0, G.height + 0.3, sz * (L / 2), 0, frameMat);
     for (const sx of [-1, 1]) addBox(0.6, G.height + 0.6, 0.7, sx * (G.width / 2 + 0.3), (G.height + 0.6) / 2 - 0.3, sz * (L / 2), 0, frameMat);
     const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false });
@@ -227,7 +229,7 @@ function buildVisuals(scene: THREE.Scene): Arena {
       floorMat.needsUpdate = true;
       for (const [team, color] of [[TEAM.BLUE, blue], [TEAM.ORANGE, orange]] as const) {
         const refs = teamRefs[team];
-        refs.frame.color.setHex(color);
+        refs.frame.color.setHex(color).multiplyScalar(HDR_TRIM); // keep HDR bloom pop on recolor
         refs.glow.color.setHex(color);
         refs.zone.color.setHex(color);
         refs.light.color.setHex(color);

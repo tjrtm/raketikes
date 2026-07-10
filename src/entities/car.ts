@@ -23,6 +23,12 @@ export class Car {
   boost = CONFIG.boost.start;
   boosting = false;
   grounded = false;
+  /** Vertical impact speed on the tick the car touched down (consumed by fx). */
+  justLanded = 0;
+  /** Set on the tick a jump/flip actually fired (consumed by fx/sfx). */
+  justJumped = false;
+  /** True while powersliding/drifting with real lateral slip (drives smoke fx). */
+  drifting = false;
   color: number;
   private hasAirJump = true;
   private input: CarInput = emptyInput();
@@ -78,7 +84,7 @@ export class Car {
   setColor(color: number) {
     this.color = color;
     this.bodyMat.color.setHex(color);
-    this.glowMat.color.setHex(color);
+    this.glowMat.color.setHex(color).multiplyScalar(1.8); // keep the HDR underglow
   }
 
   applyInput(input: CarInput) {
@@ -110,6 +116,12 @@ export class Car {
   backDir(out: THREE.Vector3): THREE.Vector3 {
     return out.set(0, 0, 1).applyQuaternion(this.quatCached());
   }
+  /** Rear-axle ground point (drift smoke origin). */
+  rearPos(out: THREE.Vector3): THREE.Vector3 {
+    const t = this.body.translation();
+    out.set(0, -C.half.y + 0.05, C.half.z * 0.7).applyQuaternion(this.quatCached()).add(this.vTmp.set(t.x, t.y, t.z));
+    return out;
+  }
   private quatCached(): THREE.Quaternion {
     const r = this.body.rotation();
     return this.quat.set(r.x, r.y, r.z, r.w);
@@ -129,7 +141,10 @@ export class Car {
     const hit = physics.rayDistance({ x: t.x, y: t.y, z: t.z }, { x: -up.x, y: -up.y, z: -up.z }, rayLen, this.body);
     const wasGrounded = this.grounded;
     this.grounded = hit !== null;
-    if (this.grounded && !wasGrounded) this.hasAirJump = true;
+    if (this.grounded && !wasGrounded) {
+      this.hasAirJump = true;
+      this.justLanded = Math.max(0, -vel.dot(up));
+    }
 
     const fwdSpeed = vel.dot(fwd);
 
@@ -159,6 +174,7 @@ export class Car {
       const gripRate = input.slide ? C.slideGrip
         : this.boosting && Math.abs(input.steer) > 0.5 ? C.driftGrip : C.grip;
       this.impulse(right, -latSpeed * this.mass * (1 - Math.exp(-gripRate * dt)));
+      this.drifting = Math.abs(latSpeed) > 5 && (input.slide || gripRate === C.driftGrip);
 
       const speedFactor = THREE.MathUtils.clamp(Math.abs(fwdSpeed) / 8, 0, 1);
       const driveSign = fwdSpeed < -0.5 ? -1 : 1;
@@ -171,6 +187,7 @@ export class Car {
 
       this.impulse(up, -C.downforce * this.mass * dt);
     } else {
+      this.drifting = false;
       // RL-style: holding slide (Square) turns stick left/right into air roll
       const steerAsRoll = input.slide ? input.steer : 0;
       const pitch = -input.throttle * C.airPitch; // W = nose down
@@ -206,8 +223,10 @@ export class Car {
       if (this.grounded) {
         this.impulse(up, C.jumpSpeed * this.mass);
         this.grounded = false;
+        this.justJumped = true;
       } else if (this.hasAirJump) {
         this.hasAirJump = false;
+        this.justJumped = true;
         const dir = this.vTmp.set(input.steer, 0, -input.throttle);
         if (dir.lengthSq() > 0.04) {
           dir.applyQuaternion(rot);
@@ -327,14 +346,14 @@ function buildCarMesh(color: number, wheelsOut: THREE.Mesh[]) {
 
   const flameGeo = new THREE.ConeGeometry(0.32, 1.5, 12);
   flameGeo.translate(0, 0.75, 0);
-  const flame = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.9, depthWrite: false }));
+  const flame = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb040).multiplyScalar(2.6), transparent: true, opacity: 0.9, depthWrite: false }));
   flame.name = 'flame';
   flame.rotation.x = Math.PI / 2;
   flame.position.set(0, 0.05, C.half.z);
   flame.visible = false;
   group.add(flame);
 
-  const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false });
+  const glowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(1.8), transparent: true, opacity: 0.3, depthWrite: false });
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(C.half.x * 2.6, C.half.z * 2.6), glowMat);
   glow.rotation.x = -Math.PI / 2;
   glow.position.y = -C.half.y - 0.06;

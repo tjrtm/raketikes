@@ -13,6 +13,7 @@ import { Bot, BOT_LEVELS } from './game/bot';
 import { Match } from './game/match';
 import { NetPlay } from './net/netplay';
 import { S, colorNum, onSettingsChange } from './game/settings';
+import { SFX } from './audio/sfx';
 import { Hud } from './ui/hud';
 import { Menu } from './ui/menu';
 import { CONFIG, KICKOFF, TEAM, type Team } from './config';
@@ -62,8 +63,7 @@ async function main() {
     match,
     kickoff,
     onGoalFx(scorer: Team) {
-      effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
-      ball.hit(1.2);
+      goalFx(scorer);
     },
     onOpponentJoined() {
       // host side: guest connected — start the online match
@@ -222,6 +222,14 @@ async function main() {
 
   // --- collision routing ---
   const tmpDir = new THREE.Vector3();
+  function goalFx(scorer: Team) {
+    const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
+    effects.burst(ball.position, color, 240, 20);
+    effects.shockwave(ball.position, color);
+    chaseCam.addShake(0.7);
+    ball.hit(1.2);
+    SFX.goal();
+  }
   const powerHit = (car: Car) => {
     // extra "power hit" impulse so contacts at speed feel punchy; bot power scales with difficulty
     const speed = car.speed;
@@ -237,6 +245,8 @@ async function main() {
       ball.body.applyImpulse({ x: tmpDir.x * mag, y: tmpDir.y * mag, z: tmpDir.z * mag }, true);
     }
     ball.hit(Math.min(1, speed / 28));
+    SFX.ballHit(Math.min(1, speed / 28));
+    if (speed > 20 && car === localCar()) chaseCam.addShake(Math.min(0.35, speed / 110));
     effects.burst(bp.addScaledVector(tmpDir, -CONFIG.ball.radius), 0xcfe4ff, Math.min(36, 6 + speed), 3 + speed * 0.3);
   };
 
@@ -253,12 +263,11 @@ async function main() {
     // goals are host-authoritative online: the guest waits for the host's goal event
     if (goalT && ballT && match.state === 'playing' && !net.isGuest) {
       const scorer: Team = goalT.team === TEAM.BLUE ? TEAM.ORANGE : TEAM.BLUE;
-      effects.burst(ball.position, scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor), 240, 20);
-      ball.hit(1.2);
+      goalFx(scorer);
       match.onGoal(scorer);
       net.broadcastGoal(scorer);
     }
-    if (padT && carT) pads.tryPickup(padT.index, carT.car as Car);
+    if (padT && carT && pads.tryPickup(padT.index, carT.car as Car) && carT.car === localCar()) SFX.pickup();
     if (carT && ballT) powerHit(carT.car as Car);
   };
 
@@ -275,7 +284,7 @@ async function main() {
       lc.fixedUpdate(STEP, physics);
     } else {
       carBlue.applyInput(live ? input.sample() : emptyInput());
-      carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball) : emptyInput());
+      carOrange.applyInput(live && match.mode === 'match' ? botAI.update(STEP, carOrange, ball, pads) : emptyInput());
       carBlue.fixedUpdate(STEP, physics);
       carOrange.fixedUpdate(STEP, physics);
     }
@@ -316,13 +325,27 @@ async function main() {
     carBlue.sync(dt);
     carOrange.sync(dt);
     ball.sync(dt);
+    if (match.physicsActive()) {
+      const bv = ball.body.linvel();
+      const bSpeed = Math.hypot(bv.x, bv.y, bv.z);
+      if (bSpeed > 22) effects.ballTrail(ball.position, tmpDir.set(bv.x, bv.y, bv.z));
+    }
     pads.sync(now / 1000);
     const lc = localCar();
     arena.update(rawDt, lc.position);
     for (const car of [carBlue, carOrange]) {
-      if (car.boosting && match.physicsActive()) {
-        effects.trail(car.nozzle(nozzlePos), car.backDir(backDir), car.color);
+      if (match.physicsActive()) {
+        if (car.boosting) effects.trail(car.nozzle(nozzlePos), car.backDir(backDir), car.color);
+        if (car.drifting) effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+        if (car.justLanded > 7) {
+          effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+          effects.smoke(car.rearPos(nozzlePos), car.backDir(backDir));
+          if (car === lc) SFX.land(car.justLanded / 20);
+        }
+        if (car.justJumped && car === lc) SFX.jump();
       }
+      car.justLanded = 0;
+      car.justJumped = false;
     }
     effects.update(match.paused ? 0 : dt);
 
@@ -331,11 +354,18 @@ async function main() {
       menuOrbit += rawDt * 0.12;
       rendering.camera.position.set(Math.cos(menuOrbit) * 42, 17, Math.sin(menuOrbit) * 42);
       rendering.camera.lookAt(0, 2, 0);
+      rendering.setFov(S.cameraFov);
     } else {
       chaseCam.update(rawDt, rendering.camera, lc.position, lc.quaternion, lc.grounded, ball.position);
+      // speed sells through FOV: widen toward supersonic and while boosting
+      const speedFov = THREE.MathUtils.clamp((lc.speed - 28) / 18, 0, 1) * 7 + (lc.boosting ? 3 : 0);
+      const targetFov = S.cameraFov + (match.physicsActive() ? speedFov : 0);
+      rendering.setFov(rendering.camera.fov + (targetFov - rendering.camera.fov) * Math.min(1, rawDt * 5));
     }
     hud.setBoost(lc.boost);
-    rendering.render();
+    const engineOn = !match.paused && (match.state === 'playing' || match.state === 'goal' || match.state === 'countdown');
+    SFX.updateEngine(lc.speed, lc.boosting, engineOn);
+    rendering.render(rawDt);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -365,10 +395,15 @@ async function main() {
   }, 50);
 
   window.addEventListener('beforeunload', () => net.leave());
+  // rAF (the only engine-audio driver) stops in hidden tabs — ramp the
+  // continuous layers down instead of droning at their last level
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) SFX.updateEngine(0, false, false);
+  });
 
   // debug handle for automated verification
   (window as unknown as Record<string, unknown>).__game = {
-    physics, ball, player: carBlue, bot: carOrange, match, chaseCam, pads, kickoff, menu, arena, effects, input, net,
+    physics, ball, player: carBlue, bot: carOrange, match, chaseCam, pads, kickoff, menu, arena, effects, input, net, rendering,
     getEnv: () => env,
     // deterministic sim driver for automated tests (tab-visibility independent)
     debugStep: (seconds: number) => {

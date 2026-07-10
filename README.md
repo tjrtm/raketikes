@@ -1,6 +1,6 @@
 # Rocket Arena
 
-A browser-based 3D car-soccer game in the spirit of Rocket League. Three.js rendering, Rapier physics, TypeScript, no assets — everything is procedural. Drive a rocket car, boost, jump, flip, and knock a giant ball into the opponent's goal inside a glass-domed stadium.
+A browser-based 3D car-soccer game in the spirit of Rocket League. Three.js rendering (HDR bloom + SMAA post pipeline), Rapier physics, procedural WebAudio sound, TypeScript, no assets — everything is procedural. Drive a rocket car, boost, jump, flip, and knock a giant ball into the opponent's goal inside a glass-domed stadium. Playable with keyboard, gamepad, or touch.
 
 ## Quick start
 
@@ -52,6 +52,10 @@ The game starts directly in a match: the arena, car, ball, HUD, and countdown re
 
 Menus are fully navigable with the controller: D-pad or left stick to move focus, ✕/Enter to select, ◯/Esc to go back, left/right to adjust a setting's value.
 
+### Touch (phones / tablets)
+
+Touch controls appear automatically on the first touch: a virtual stick on the left half of the screen (steer + throttle; doubles as air pitch/yaw, and as air roll while SLIDE is held) plus JUMP / BOOST / SLIDE / CAM buttons on the right, with pause and reset in the top corner.
+
 ## Settings
 
 All settings persist in `localStorage` and apply live:
@@ -62,6 +66,34 @@ All settings persist in `localStorage` and apply live:
 - **Game speed** — 0.75x / 1x / 1.25x global time scale
 - **Car colors** — separate pickers for you and the bot (recolors cars, goals, trim, HUD)
 - **Unlimited boost**, **camera FOV**, **particle effects** toggle
+- **Glow effects** — the bloom/SMAA post pipeline; turn off for weak GPUs
+- **Volume / mute** — all sound is synthesized live (engine, boost roar, ball impacts, goal explosion + crowd, countdown, UI)
+
+## Multiplayer connectivity (TURN / strict NATs)
+
+Multiplayer is pure P2P: the free PeerJS cloud broker handles signaling, then game
+traffic flows directly between the two browsers over WebRTC. Two channels share one
+peer connection — a reliable one for events (start, kickoff, goals) and an
+unreliable/unordered one for 30 Hz state snapshots, with remote entities rendered
+~100 ms in the past and interpolated between snapshots.
+
+Direct connections work for most home networks (STUN), but peer pairs behind
+**symmetric/strict NATs** (some mobile carriers, corporate networks) cannot punch
+through and need a **TURN relay**. If that's your situation the join screen will say
+so explicitly ("your networks likely block P2P") instead of spinning forever.
+
+To add a TURN server, provide standard [RTCIceServer](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers) entries at build time:
+
+```sh
+VITE_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:your.relay:443","username":"u","credential":"c"}]' npm run build
+```
+
+or at runtime, before hosting/joining: `game.net.session.iceServers = [...]` (the
+game object is exposed as `window.__game`). Options:
+
+- **[Metered Open Relay](https://www.metered.ca/tools/openrelay/)** — free 20 GB/month TURN tier; credentials come from a client-side fetch, so it works on a static deployment (GitHub Pages) with no backend.
+- **Self-hosted** — run [coturn](https://github.com/coturn/coturn) on any VPS (`turnserver --lt-cred-mech --user=u:c --realm=yourdomain`), and optionally your own [PeerServer](https://github.com/peers/peerjs-server) instead of the cloud broker for signaling.
+- **[Cloudflare Realtime TURN](https://developers.cloudflare.com/realtime/turn/)** — 1 TB/month free, but minting credentials requires a secret, so you need a tiny worker/backend.
 
 ## Project structure
 
