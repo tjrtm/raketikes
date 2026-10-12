@@ -15,16 +15,38 @@ export class Hud {
   private overlaySub = el('overlaySub');
 
   private lastCenter = '';
+  private lastBlue = -1;
+  private lastOrange = -1;
+  private lastTimerText = '';
+  private lastOvertime = false;
+  private lastBoost = -1;
 
+  // Each setter guards against redundant writes: match.update() calls these every
+  // frame, and touching textContent / style / classList on every tick forces the
+  // browser to re-validate layout/paint even when nothing changed. Only mutate the
+  // DOM when the value actually differs.
   setScore(blue: number, orange: number) {
-    this.scoreBlue.textContent = String(blue);
-    this.scoreOrange.textContent = String(orange);
+    if (blue !== this.lastBlue) {
+      this.scoreBlue.textContent = String(blue);
+      this.lastBlue = blue;
+    }
+    if (orange !== this.lastOrange) {
+      this.scoreOrange.textContent = String(orange);
+      this.lastOrange = orange;
+    }
   }
 
   setTimer(secondsLeft: number, overtime: boolean, practice = false) {
     const s = Math.max(0, Math.ceil(secondsLeft));
-    this.timer.textContent = practice ? '∞' : overtime ? '+OT' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    this.timer.classList.toggle('overtime', overtime);
+    const text = practice ? '∞' : overtime ? '+OT' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (text !== this.lastTimerText) {
+      this.timer.textContent = text;
+      this.lastTimerText = text;
+    }
+    if (overtime !== this.lastOvertime) {
+      this.timer.classList.toggle('overtime', overtime);
+      this.lastOvertime = overtime;
+    }
   }
 
   setScoreColors(blueCss: string, orangeCss: string) {
@@ -41,8 +63,11 @@ export class Hud {
 
   setBoost(v: number) {
     const b = Math.round(v);
-    this.boostNum.textContent = String(b);
-    this.boostFill.style.width = `${b}%`;
+    if (b !== this.lastBoost) {
+      this.boostNum.textContent = String(b);
+      this.boostFill.style.width = `${b}%`;
+      this.lastBoost = b;
+    }
   }
 
   /** Big center text. Pass '' to hide. `goal` styles it gold with a pop animation. */

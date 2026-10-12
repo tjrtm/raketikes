@@ -58,7 +58,7 @@ export class Rendering {
 
     this.sun = new THREE.DirectionalLight(0xfff4e0, 1.7);
     this.sun.position.set(35, 60, 25);
-    this.sun.castShadow = true;
+    this.sun.castShadow = S.shadows;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.left = -70;
     this.sun.shadow.camera.right = 70;
@@ -82,13 +82,18 @@ export class Rendering {
     const passLite = new EffectPass(this.camera, new SMAAEffect());
     this.composer.addPass(passFull);
     this.composer.addPass(passLite);
+    // The composer's auto renderToScreen only flags the *last added* pass (passLite).
+    // Since exactly one of these is enabled at a time, the enabled one must draw to the
+    // canvas — otherwise passFull renders offscreen and the arena shows up black.
+    this.composer.autoRenderToScreen = false;
     const applyPostfx = () => {
-      passFull.enabled = S.postfx;
-      passLite.enabled = !S.postfx;
+      passFull.enabled = passFull.renderToScreen = S.postfx;
+      passLite.enabled = passLite.renderToScreen = !S.postfx;
     };
     applyPostfx();
     onSettingsChange((key) => {
       if (key === 'postfx') applyPostfx();
+      else if (key === 'shadows') this.sun.castShadow = S.shadows;
     });
 
     window.addEventListener('resize', () => {

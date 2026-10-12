@@ -45,6 +45,13 @@ export class Car {
   private vVel = new THREE.Vector3();
   private vTmp = new THREE.Vector3();
   private quat = new THREE.Quaternion();
+  // Reused getter outputs: `position`/`quaternion` are read several times per frame
+  // (camera, bot, fx), so returning a fresh Vector3/Quaternion each call spams the GC.
+  // Callers must treat the returned object as transient (copy before mutating).
+  private _pos = new THREE.Vector3();
+  private _quat = new THREE.Quaternion();
+  private _vel = new THREE.Vector3();
+  private _spin = new THREE.Vector3();
 
   constructor(physics: Physics, scene: THREE.Scene, team: Team, pos: { x: number; y: number; z: number }, yaw: number) {
     this.team = team;
@@ -93,15 +100,15 @@ export class Car {
 
   get position(): THREE.Vector3 {
     const t = this.body.translation();
-    return new THREE.Vector3(t.x, t.y, t.z);
+    return this._pos.set(t.x, t.y, t.z);
   }
   get quaternion(): THREE.Quaternion {
     const r = this.body.rotation();
-    return new THREE.Quaternion(r.x, r.y, r.z, r.w);
+    return this._quat.set(r.x, r.y, r.z, r.w);
   }
   get velocity(): THREE.Vector3 {
     const v = this.body.linvel();
-    return new THREE.Vector3(v.x, v.y, v.z);
+    return this._vel.set(v.x, v.y, v.z);
   }
   get speed(): number {
     const v = this.body.linvel();
@@ -235,7 +242,7 @@ export class Car {
           const v = this.body.linvel();
           this.body.setLinvel({ x: v.x, y: v.y * 0.3, z: v.z }, true);
           this.impulse(dir, C.flipSpeed * this.mass);
-          const spinAxis = new THREE.Vector3().crossVectors(UP, dir).multiplyScalar(C.flipSpin);
+          const spinAxis = this._spin.crossVectors(UP, dir).multiplyScalar(C.flipSpin);
           this.body.setAngvel({ x: spinAxis.x, y: spinAxis.y, z: spinAxis.z }, true);
         } else {
           this.impulse(up, C.doubleJumpSpeed * this.mass);

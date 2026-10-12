@@ -222,6 +222,7 @@ async function main() {
 
   // --- collision routing ---
   const tmpDir = new THREE.Vector3();
+  const tmpBurst = new THREE.Vector3();
   function goalFx(scorer: Team) {
     const color = scorer === TEAM.BLUE ? colorNum(S.blueColor) : colorNum(S.orangeColor);
     effects.burst(ball.position, color, 240, 20);
@@ -247,7 +248,8 @@ async function main() {
     ball.hit(Math.min(1, speed / 28));
     SFX.ballHit(Math.min(1, speed / 28));
     if (speed > 20 && car === localCar()) chaseCam.addShake(Math.min(0.35, speed / 110));
-    effects.burst(bp.addScaledVector(tmpDir, -CONFIG.ball.radius), 0xcfe4ff, Math.min(36, 6 + speed), 3 + speed * 0.3);
+    // copy first: ball.position is a reused vector, so don't mutate it in place
+    effects.burst(tmpBurst.copy(bp).addScaledVector(tmpDir, -CONFIG.ball.radius), 0xcfe4ff, Math.min(36, 6 + speed), 3 + speed * 0.3);
   };
 
   const onCollision = (a: Tag | undefined, b: Tag | undefined, started: boolean) => {

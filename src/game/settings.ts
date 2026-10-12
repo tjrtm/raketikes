@@ -13,6 +13,7 @@ export interface Settings {
   cameraFov: number;
   particles: boolean;
   postfx: boolean;       // bloom/SMAA/vignette composer (off = plain render)
+  shadows: boolean;      // dynamic shadows (off for weak GPUs)
   volume: number;        // 0..100 master volume
   muted: boolean;
 }
@@ -28,6 +29,7 @@ export const DEFAULTS: Settings = {
   cameraFov: 72,
   particles: true,
   postfx: true,
+  shadows: true,
   volume: 70,
   muted: false,
 };

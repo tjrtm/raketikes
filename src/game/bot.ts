@@ -52,6 +52,7 @@ export class Bot {
   private tmpFwd = new THREE.Vector3();
   private tmpRight = new THREE.Vector3();
   private tmpUp = new THREE.Vector3();
+  private tmpBall = new THREE.Vector3();
 
   private get level(): BotLevel {
     return BOT_LEVELS[S.botLevel];
@@ -156,7 +157,8 @@ export class Bot {
     const botPos = bot.position;
 
     // lead the ball by its velocity, scaled by distance and skill
-    const ballPos = ball.position;
+    // (copy: ball.position is a reused vector, and we mutate this prediction below)
+    const ballPos = this.tmpBall.copy(ball.position);
     const bv = ball.body.linvel();
     const dist0 = botPos.distanceTo(ballPos);
     const leadT = THREE.MathUtils.clamp(dist0 / 30, 0, 1.1) * lvl.predict;
