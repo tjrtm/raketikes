@@ -13,6 +13,11 @@ const POSITIONS: Array<{ x: number; z: number }> = [
   { x: 24, z: 0 },
 ];
 
+// Precomputed disc colors (>1 keeps the active pad above the bloom threshold).
+// sync() runs every frame; copying avoids re-converting hex and re-scaling per pad.
+const PAD_ACTIVE_COLOR = new THREE.Color(0xffc23d).multiplyScalar(1.6);
+const PAD_INACTIVE_COLOR = new THREE.Color(0x5a5040);
+
 interface Pad {
   active: boolean;
   timer: number;
@@ -97,11 +102,11 @@ export class BoostPads {
         pad.orb.position.y = 1.1 + Math.sin(time * 2.4) * 0.15;
         pad.orb.rotation.y = time * 1.5;
         discMat.opacity = 0.65 + Math.sin(time * 3) * 0.2;
-        discMat.color.setHex(0xffc23d).multiplyScalar(1.6);
+        discMat.color.copy(PAD_ACTIVE_COLOR);
       } else {
         pad.orb.visible = false;
         discMat.opacity = 0.12;
-        discMat.color.setHex(0x5a5040);
+        discMat.color.copy(PAD_INACTIVE_COLOR);
       }
     }
   }

@@ -29,6 +29,7 @@ export class Effects {
   private maxLife = new Float32Array(MAX);
   private base = new Float32Array(MAX * 3);
   private cursor = 0;
+  private alive = 0;
   private tmpColor = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
@@ -100,6 +101,9 @@ export class Effects {
     if (!this.enabled) return;
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % MAX;
+    // ring buffer: if this slot was free, a particle is born; if it held a live one,
+    // the overwrite nets out (one dies, one is born) so `alive` stays correct.
+    if (this.life[i] <= 0) this.alive++;
     this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
     this.vel[i * 3] = v.x; this.vel[i * 3 + 1] = v.y; this.vel[i * 3 + 2] = v.z;
     this.tmpColor.setHex(color).multiplyScalar(1.8); // HDR so trails/bursts bloom
@@ -146,10 +150,12 @@ export class Effects {
       w.mesh.scale.set(s, s, s);
       w.mat.opacity = 0.85 * (1 - f) * (1 - f);
     }
+    if (this.alive === 0) return; // idle: skip the 900-slot sweep entirely
     for (let i = 0; i < MAX; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
+        this.alive--;
         this.pos[i * 3 + 1] = -1000;
         this.col[i * 3] = this.col[i * 3 + 1] = this.col[i * 3 + 2] = 0;
         continue;

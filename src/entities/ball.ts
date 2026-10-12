@@ -27,6 +27,8 @@ export class Ball {
   mesh: THREE.Mesh;
   private mat: THREE.MeshStandardMaterial;
   private flash = 0;
+  // Reused getter output (see Car.position for rationale): transient, copy before mutating.
+  private _pos = new THREE.Vector3();
 
   constructor(physics: Physics, scene: THREE.Scene) {
     const B = CONFIG.ball;
@@ -63,7 +65,7 @@ export class Ball {
 
   get position(): THREE.Vector3 {
     const t = this.body.translation();
-    return new THREE.Vector3(t.x, t.y, t.z);
+    return this._pos.set(t.x, t.y, t.z);
   }
 
   /** Impact highlight, 0..1 strength. */

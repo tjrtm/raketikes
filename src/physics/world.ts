@@ -16,6 +16,9 @@ export class Physics {
   world: RAPIER.World;
   private events: RAPIER.EventQueue;
   private tags = new Map<number, Tag>();
+  // Reused ray for ground/self-right checks: castRay() reads origin/dir synchronously,
+  // so a single instance avoids allocating a Ray for every car, every physics tick.
+  private ray = new RAPIER.Ray({ x: 0, y: -1, z: 0 }, { x: 0, y: -1, z: 0 });
 
   private constructor() {
     this.world = new RAPIER.World({ x: 0, y: CONFIG.gravity, z: 0 });
@@ -46,7 +49,11 @@ export class Physics {
     maxLen: number,
     exclude?: RAPIER.RigidBody,
   ): number | null {
-    const hit = this.world.castRay(new RAPIER.Ray(origin, dir), maxLen, true, undefined, undefined, undefined, exclude);
+    const o = this.ray.origin;
+    const d = this.ray.dir;
+    o.x = origin.x; o.y = origin.y; o.z = origin.z;
+    d.x = dir.x; d.y = dir.y; d.z = dir.z;
+    const hit = this.world.castRay(this.ray, maxLen, true, undefined, undefined, undefined, exclude);
     if (!hit) return null;
     // property renamed across rapier versions
     return (hit as { timeOfImpact?: number; toi?: number }).timeOfImpact ?? (hit as { toi?: number }).toi ?? null;
